@@ -115,7 +115,7 @@ export const actions: Actions = {
       audioId: audio.id,
       content: comment,
     });
-    return redirect(303, `/listen/${audio.id}`);
+    return {success: true};
   },
   
 };
