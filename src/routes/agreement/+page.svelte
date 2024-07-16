@@ -1,6 +1,7 @@
 <script>
   import title from "$lib/title";
-  title.set("Agreement");
+  import { onMount } from "svelte";
+  onMount(() => title.set("Agreement"));
 </script>
 
 <h1>The Core Philosophy</h1>

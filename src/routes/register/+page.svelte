@@ -1,7 +1,8 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-import title from "$lib/title";
-  title.set("Register");
+  import title from "$lib/title";
+  import { onMount } from "svelte";
+  onMount(() => title.set("Register"));
 </script>
 
 <h1>Register</h1>
@@ -21,13 +22,7 @@ import title from "$lib/title";
   </div>
   <div class="form-group">
     <label for="email">Email:</label>
-    <input
-      type="email"
-      id="email"
-      name="email"
-      required
-      class="form-control"
-    />
+    <input type="email" id="email" name="email" required class="form-control" />
   </div>
   <div class="form-group">
     <label for="password">Password:</label>

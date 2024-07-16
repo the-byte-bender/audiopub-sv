@@ -1,12 +1,16 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-import title from "$lib/title";
-  title.set("Verify your email");
+  import title from "$lib/title";
+  import { onMount } from "svelte";
+  onMount(() => title.set("Verify your email"));
 </script>
 
 <h1>Verify your email</h1>
 
-<p>Go to your email inbox. We've sent you a verification token there. Enter it below to verify your email address.</p>
+<p>
+  Go to your email inbox. We've sent you a verification token there. Enter it
+  below to verify your email address.
+</p>
 
 <form use:enhance method="post">
   <div class="form-group">

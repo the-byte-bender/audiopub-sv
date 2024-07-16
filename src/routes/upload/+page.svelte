@@ -1,7 +1,8 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-import title from "$lib/title";
-  title.set("Upload Audio");
+  import title from "$lib/title";
+  import { onMount } from "svelte";
+  onMount(() => title.set("Upload Audio"));
 </script>
 
 <h1>Upload Audio</h1>
@@ -30,13 +31,7 @@ import title from "$lib/title";
   </div>
   <div class="form-group">
     <label for="audio">Audio File:</label>
-    <input
-      type="file"
-      id="audio"
-      name="file"
-      required
-      class="form-control"
-    />
+    <input type="file" id="audio" name="file" required class="form-control" />
   </div>
   <p class="info">
     Most known audio formats should be supported. Your audio may be transcoded

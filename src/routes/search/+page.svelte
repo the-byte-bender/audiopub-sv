@@ -2,7 +2,8 @@
   export let data;
   import AudioList from "$lib/components/audio_list.svelte";
   import title from "$lib/title";
-  title.set(`${data.query} | search`);
+  import { onMount } from "svelte";
+  onMount(() => title.set(`Search results for: ${data.query}`));
 </script>
 <h1>Search results for: {data.query}</h1>
 

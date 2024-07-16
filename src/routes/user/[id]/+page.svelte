@@ -2,9 +2,9 @@
   import { enhance } from "$app/forms";
   import AudioList from "$lib/components/audio_list.svelte";
   import title from "$lib/title.js";
-
+  import { onMount } from "svelte";
   export let data;
-  title.set(`${data.profileUser.displayName}'s Profile`);
+  onMount(() => title.set(`${data.profileUser.displayName}'s Profile`));
 </script>
 
 <h1>{data.profileUser.displayName}'s Profile</h1>

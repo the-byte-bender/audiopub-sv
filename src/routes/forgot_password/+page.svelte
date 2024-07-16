@@ -1,6 +1,7 @@
 <script lang="ts">
   import title from "$lib/title";
-  title.set("Forgot password");
+  import { onMount } from "svelte";
+  onMount(() => title.set("Forgot Password"));
 </script>
 
 <h1>Forgot password</h1>

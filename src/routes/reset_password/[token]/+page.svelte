@@ -1,7 +1,8 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
   import title from "$lib/title";
-  title.set("Reset your password");
+  import { onMount } from "svelte";
+  onMount(() => title.set("Reset Password"));
   export let data;
 </script>
 

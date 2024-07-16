@@ -1,7 +1,8 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
   import title from "$lib/title";
-  title.set("Login");
+  import { onMount } from "svelte";
+  onMount(() => title.set("Login"));
 </script>
 
 <h1>Login</h1>

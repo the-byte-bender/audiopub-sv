@@ -2,7 +2,8 @@
   import { enhance } from "$app/forms";
   import type { PageData } from "./$types";
   import title from "$lib/title";
-  title.set("Your Profile");
+  import { onMount } from "svelte";
+  onMount(() => title.set("Your profile"));
 
   export let data: PageData;
 </script>

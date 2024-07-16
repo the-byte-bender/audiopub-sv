@@ -2,9 +2,10 @@
   export let data;
 
   import { enhance } from "$app/forms";
+  import {onMount} from "svelte";
   import CommentList from "$lib/components/comment_list.svelte";
   import title from "$lib/title";
-  title.set(data.audio.title);
+  onMount(() => title.set(data.audio.title));
   const handlePlay = () => {
     fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" });
   };
