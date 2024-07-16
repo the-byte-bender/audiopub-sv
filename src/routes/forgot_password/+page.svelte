@@ -1,0 +1,96 @@
+<script lang="ts">
+  import title from "$lib/title";
+  title.set("Forgot password");
+</script>
+
+<h1>Forgot password</h1>
+
+<p>
+  You forgot your password? No problem! Just enter your email address and we'll
+  send you a link to reset your password.
+</p>
+
+<form action="/forgot_password" method="post">
+  <div class="form-group">
+    <label for="email">Email</label>
+    <input
+      type="email"
+      id="email"
+      name="email"
+      placeholder="Email"
+      class="form-control"
+      required
+    />
+  </div>
+  <button type="submit" class="btn">Send reset link</button>
+</form>
+
+<style>
+  h1 {
+    text-align: center;
+    margin-bottom: 1rem;
+    color: #333;
+  }
+
+  p {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #666;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 2rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .form-group {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  label {
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #555;
+  }
+
+  .form-control {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease-in-out;
+    width: 100%; /* Ensures input fills its container */
+  }
+
+  .form-control:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+  }
+
+  .btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s ease-in-out;
+  }
+
+  .btn:hover {
+    background-color: #0056b3;
+  }
+</style>
