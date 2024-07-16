@@ -121,7 +121,7 @@ export const actions: Actions = {
     // Only an admin, or the user who made the comment can delete a comment
     const user = event.locals.user;
     const form = await event.request.formData();
-    const commentId = form.get("commentId") as string;
+    const commentId = form.get("id") as string;
     if (!commentId) {
       return fail(400);
     }
