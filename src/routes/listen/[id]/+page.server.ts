@@ -117,5 +117,22 @@ export const actions: Actions = {
     });
     return {success: true};
   },
-  
+  delete_comment: async (event) => {
+    // Only an admin, or the user who made the comment can delete a comment
+    const user = event.locals.user;
+    const form = await event.request.formData();
+    const commentId = form.get("commentId") as string;
+    if (!commentId) {
+      return fail(400);
+    }
+    const comment = await Comment.findByPk(commentId, { include: User });
+    if (!comment) {
+      return error(404, "Not found");
+    }
+    if (!user || (!user.isAdmin && user.id !== comment.userId)) {
+      return error(403, "Forbidden");
+    }
+    await comment.destroy();
+    return {success: true};
+  }
 };

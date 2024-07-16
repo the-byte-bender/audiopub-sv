@@ -1,7 +1,10 @@
 <script lang="ts">
-  import type { ClientsideComment } from "$lib/types";
+  import { enhance } from "$app/forms";
+  import type { ClientsideComment, ClientsideUser } from "$lib/types";
 
   export let comments: ClientsideComment[];
+  export let user: ClientsideUser|undefined = undefined;
+  export let isAdmin: boolean = false;
 </script>
 
 <section role="group" aria-label="Comments">
@@ -9,8 +12,18 @@
   {#if comments.length > 0}
     {#each comments as comment (comment.id)}
       <div>
-        <h3><a href={`/user/${comment.user.id}`}>{comment.user.displayName}</a></h3>
+        <h3>
+          <a href={`/user/${comment.user.id}`}>{comment.user.displayName}</a>
+        </h3>
         <pre>{comment.content}</pre>
+        {#if isAdmin || (user && user.id === comment.user.id)}
+          <div id="comment-actions">
+            <form use:enhance action="?/delete_comment" method="post">
+              <input type="hidden" name="id" value={comment.id} />
+              <button type="submit">Delete</button>
+            </form>
+          </div>
+        {/if}
       </div>
     {/each}
   {:else}
@@ -51,6 +64,10 @@
     background-color: #fff;
     padding: 0.5rem;
     border: none;
+    margin-top: 0.5rem;
+  }
+
+  section[role="group"] div #comment-actions {
     margin-top: 0.5rem;
   }
 
