@@ -19,7 +19,7 @@
     <p>Your browser doesn't support the audio element.</p>
   </audio>
   <a
-    href={data.audio.path}
+    href="/{data.audio.path}"
     download={data.audio.title +
       (data.audio.extension.startsWith(".")
         ? data.audio.extension
