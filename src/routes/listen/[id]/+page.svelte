@@ -14,8 +14,8 @@
 
 <div class="audio-player">
   <audio controls id="player" on:play={handlePlay}>
-    <source src=/{data.audio.path} type={data.mimeType} />
-    <source src=/{data.audio.transcodedPath} type="audio/aac" />
+    <source src="/{data.audio.path}" type={data.mimeType} />
+    <source src="/{data.audio.transcodedPath}" type="audio/aac" />
     <p>Your browser doesn't support the audio element.</p>
   </audio>
   <a
@@ -80,7 +80,11 @@
     {/if}
   {/if}
 
-  <CommentList comments={data.comments} />
+  <CommentList
+    comments={data.comments}
+    isAdmin={data.isAdmin}
+    user={data.user}
+  />
 
   {#if data.user && !data.user.isBanned}
     <form use:enhance action="?/add_comment" method="POST">
