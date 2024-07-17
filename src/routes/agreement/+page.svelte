@@ -83,8 +83,7 @@
 <h1>The Technical Bits</h1>
 <ul>
   <li>
-    The site runs on a basic stack: Express, Node.js with typescript, and
-    MariaDB. Nothing fancy.
+    The site runs on a basic stack: svelte kit with typescript, and mariaDB.
   </li>
   <li>
     Files are stored in block storage in the cloud. I won't name names, but it's
@@ -95,8 +94,8 @@
     project like this.
   </li>
   <li>
-    The code isn't open-source (yet), but I'm considering it for the near
-    future.
+    The code is open-source under the AGPL-3.0 license. You can find it on
+    <a href="https://github.com/the-byte-bender/audiopub-sv">GitHub</a>.
   </li>
 </ul>
 
@@ -182,8 +181,8 @@
 <h1>Legal Disclaimer</h1>
 <ul>
   <li>
-    I'm a developer, not a lawyer. This agreement is my best effort at clarity, not
-    a legal document.
+    I'm a developer, not a lawyer. This agreement is my best effort at clarity,
+    not a legal document.
   </li>
   <li>
     By using this site, you agree not to hold me liable for, well, anything. Use
@@ -210,8 +209,8 @@
     If you find a bug, let me know. If you have a suggestion, I'm all ears.
   </li>
   <li>
-    Be nice to each other in comments and other types of messages. We're all here because we
-    love audio.
+    Be nice to each other in comments and other types of messages. We're all
+    here because we love audio.
   </li>
 </ul>
 
@@ -227,12 +226,4 @@
   immediate response, but I promise I'll read every message.
 </p>
 
-<p>
-  Last updated: [Friday, June 21, 2024] while wondering if I should learn music
-  theory.
-</p>
-
-<p>
-  Remember: This is a passion project by one developer. It's not perfect, but
-  it's made with love. Enjoy responsibly!
-</p>
+<p>Last updated: Wednesday, July 17, 2024.</p>
