@@ -1,7 +1,13 @@
 <script lang="ts">
   export let visible: boolean;
   let dialog: HTMLDialogElement;
-  $: if (dialog && visible) dialog.showModal();
+  $: if (dialog) {
+    if (visible) {
+      dialog.showModal();
+    } else {
+      dialog.close();
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
