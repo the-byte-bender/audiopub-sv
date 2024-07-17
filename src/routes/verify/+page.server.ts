@@ -1,7 +1,7 @@
 import { fail, redirect } from "@sveltejs/kit";
 import type { Actions } from "./$types";
 
-const actions: Actions = {
+export const actions: Actions = {
   default: async (event) => {
     const form = await event.request.formData();
     const user = event.locals.user;
