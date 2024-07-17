@@ -87,6 +87,11 @@
       I'm sorry for the unprofessional email address, I'm still working on it.
     </p>
     <a href="/agreement">Our Agreement</a>
+    <p>
+      Audiopub is open source software. The code is licensed under the GNU
+      AFFERO GENERAL PUBLIC LICENSE. You can find the source code on
+      <a href="https://github.com/the-byte-bender/audiopub-sv">GitHub</a>.
+    </p>
   </div>
 </footer>
 
