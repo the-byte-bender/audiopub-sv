@@ -1,6 +1,6 @@
 /*
  * This file is part of the audiopub project.
- * 
+ *
  * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,14 +20,20 @@ import Mailgun from "mailgun-js";
 import * as dotenv from "dotenv";
 dotenv.config();
 
-if (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN) {
+const emailEnabled = !(process.env.NO_EMAIL === "true");
+if (
+  emailEnabled &&
+  (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN)
+) {
   throw new Error("Please provide a mailgun API key and domain");
 }
 
-const mailgun = new Mailgun({
-  apiKey: process.env.MAILGUN_API_KEY,
-  domain: process.env.MAILGUN_DOMAIN,
-});
+const mailgun = emailEnabled
+  ? new Mailgun({
+      apiKey: process.env.MAILGUN_API_KEY as string,
+      domain: process.env.MAILGUN_DOMAIN as string,
+    })
+  : null;
 
 export default function sendEmail(
   to: string,
@@ -40,5 +46,9 @@ export default function sendEmail(
     subject,
     html: htmlContent,
   };
-  return mailgun.messages().send(data);
+  if (!emailEnabled) {
+    console.log("Email disabled, not sending email", data);
+    return Promise.resolve({} as Mailgun.messages.SendResponse);
+  }
+  return mailgun!.messages().send(data);
 }
