@@ -24,6 +24,8 @@ import { hash } from "bcrypt";
 
 export const actions: Actions = {
   default: async (event) => {
+    // Account creation is disabled.
+    return fail(403, { message: "Account creation is disabled." });
     const form = await event.request.formData();
     let email = form.get("email") as string;
     let username = form.get("username") as string;
