@@ -106,6 +106,11 @@
   />
 
   {#if data.user && !data.user.isBanned}
+    {#if !data.user.isTrusted}
+      <p role="alert">
+        You're not trusted yet. Your comments will be reviewed before being shown. If you submit a comment, it will not be displayed until it's reviewed.
+      </p>
+    {/if}
     <form use:enhance action="?/add_comment" method="POST">
       <label for="comment">Add a comment:</label>
       <textarea name="comment" id="comment" required maxlength="4000"
