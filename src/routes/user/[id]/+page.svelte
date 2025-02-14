@@ -45,6 +45,12 @@
 </table>
 
 {#if data.isAdmin}
+  {#if !data.profileUser.isTrusted}
+    <form use:enhance action="?/trust" method="post">
+      <button type="submit">Trust</button>
+    </form>
+  {/if}
+    
   <details>
     <summary>administrative actions</summary>
     {#if !data.profileUser.isBanned}

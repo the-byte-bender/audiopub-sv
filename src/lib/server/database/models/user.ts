@@ -100,6 +100,11 @@ export default class User extends Model {
   declare isBanned: boolean;
 
   @AllowNull(false)
+  @Default(true)
+  @Column(DataType.BOOLEAN)
+  declare isTrusted: boolean;
+
+  @AllowNull(false)
   @Default(false)
   @Column(DataType.BOOLEAN)
   declare isAdmin: boolean;
@@ -248,6 +253,7 @@ export default class User extends Model {
       displayName: this.displayName,
       isBanned: this.isBanned,
       isVerified: this.isVerified,
+      isTrusted: this.isTrusted,
     };
   }
 
@@ -256,6 +262,7 @@ export default class User extends Model {
     user.email = user.email.toLowerCase();
     user.displayName = user.name;
     user.name = user.name.toLowerCase();
+    user.isTrusted = false;
   }
 
   @BeforeUpdate

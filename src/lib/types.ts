@@ -22,6 +22,7 @@ export interface ClientsideUser {
   displayName: string;
   isBanned: boolean;
   isVerified: boolean;
+  isTrusted: boolean;
 }
 
 export interface ClientsideAudio {

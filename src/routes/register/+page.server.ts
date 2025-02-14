@@ -74,6 +74,7 @@ export const actions: Actions = {
       name: username,
       email: email,
       password: await hash(password, 12),
+      isTrusted: false,
     });
     event.cookies.set("token", await user.generateToken(), { path: "/", maxAge: 60 * 60 * 24 * 365});
     user.trySendVerificationEmail();

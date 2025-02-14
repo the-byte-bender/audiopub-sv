@@ -47,6 +47,9 @@
   {#each audios as audio}
     <article class="audio-item">
       <h3>
+        {#if audio.user && !audio.user.isTrusted}
+          <span style="color: red">(Pending review)</span> |{" "}
+        {/if}
         <a href={`/listen/${audio.id}`}>{audio.title}</a>| {audio.playsString}
       </h3>
       {#if audio.user}
