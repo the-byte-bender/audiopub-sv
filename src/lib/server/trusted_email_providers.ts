@@ -43,5 +43,6 @@ const trustedEmailProviders = [
   "pwry.net",
   "gmx.de",
   "garwood.day",
+  "iamtalon.me",
 ];
 export default trustedEmailProviders;
