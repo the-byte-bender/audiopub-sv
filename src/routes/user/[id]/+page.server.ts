@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, User } from "$lib/server/database";
+import { Audio, Comment, User } from "$lib/server/database";
 import { error, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -59,6 +59,11 @@ export const actions: Actions = {
         const reason = form.get("reason") as string;
         const message = form.get("message") as string;
         await userToBeBanned.ban(reason, message);
+        if (!userToBeBanned.isTrusted){
+            // Delete all audios and comments of the user.
+            await Audio.destroy({ where: { userId: userToBeBanned.id } });
+            await Comment.destroy({ where: { userId: userToBeBanned.id } });
+        }
         return redirect(303, `/user/${userToBeBanned.id}`);
     },
     warn: async (event) => {
