@@ -17,69 +17,86 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-  import { enhance } from "$app/forms";
-  import type { PageData } from "./$types";
-  import title from "$lib/title";
-  import { onMount } from "svelte";
-  onMount(() => title.set("Your profile"));
+    import { enhance } from "$app/forms";
+    import type { PageData } from "./$types";
+    import type { ActionData } from "./$types";
+    import title from "$lib/title";
+    import { onMount } from "svelte";
+    onMount(() => title.set("Your profile"));
 
-  export let data: PageData;
+    export let data: PageData;
+    export let form: ActionData;
 </script>
 
 <h1>Your Profile</h1>
 
 <form use:enhance method="POST">
-  <label for="email">Email:</label>
-  <input type="email" id="email" name="email" value={data.email} />
-  <label for="displayName">Display Name:</label>
-  <input
-    type="text"
-    id="displayName"
-    name="displayName"
-    value={data.displayName}
-    minlength="3"
-    maxlength="30"
-  />
-  <label for="password">New Password:</label>
-  <input
-    type="password"
-    id="password"
-    name="password"
-    minlength="8"
-    maxlength="64"
-  />
-  <button type="submit">Update</button>
+    {#if form?.message}
+        <div class="error-message" role="alert">
+            {form.message}
+        </div>
+    {/if}
+
+    <label for="email">Email:</label>
+    <input type="email" id="email" name="email" value={data.email} />
+    <label for="displayName">Display Name:</label>
+    <input
+        type="text"
+        id="displayName"
+        name="displayName"
+        value={data.displayName}
+        minlength="3"
+        maxlength="30"
+    />
+    <label for="password">New Password:</label>
+    <input
+        type="password"
+        id="password"
+        name="password"
+        minlength="8"
+        maxlength="64"
+    />
+    <button type="submit">Update</button>
 </form>
 
 <style>
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    width: fit-content;
-    margin: auto;
-  }
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+    }
 
-  label {
-    font-weight: bold;
-  }
+    form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: fit-content;
+        margin: auto;
+    }
 
-  input[type="text"],
-  input[type="email"] {
-    padding: 0.5rem;
-    border: 1px solid #ccc;
-  }
+    label {
+        font-weight: bold;
+    }
 
-  button {
-    background-color: #333;
-    color: #fff;
-    padding: 0.75rem 1rem;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-  }
+    input[type="text"],
+    input[type="email"] {
+        padding: 0.5rem;
+        border: 1px solid #ccc;
+    }
 
-  button:hover {
-    background-color: #444;
-  }
+    button {
+        background-color: #333;
+        color: #fff;
+        padding: 0.75rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background-color: #444;
+    }
 </style>
