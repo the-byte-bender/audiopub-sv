@@ -69,7 +69,8 @@ export const actions: Actions = {
         if (description && description.length > 5000) {
             return fail(400, { title, description });
         }
-        if (file.size > 1024 * 1024 * 50) {
+        if (file.size > 1024 * 1024 * 500) {
+            // 500 MB
             return fail(400, { title, description });
         }
         const audio = await Audio.create({
@@ -80,14 +81,11 @@ export const actions: Actions = {
             extension: path.extname(file.name),
         });
         await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
-        try {
-            await transcode(audio.path);
-        } catch (err) {
+        transcode(audio.path).catch(async (err) => {
             console.error(err);
             await audio.destroy();
             await fs.unlink(audio.path);
-            return fail(500, { title, description });
-        }
+        });
         return redirect(303, `/listen/${audio.id}`);
     },
 };
