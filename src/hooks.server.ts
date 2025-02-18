@@ -23,7 +23,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export const handle: Handle = async ({ event, resolve }) => {
-    const host = event.url.hostname;
+    const host = event.request.headers.get("x-forwarded-host") || event.url.hostname;
 
     if (host.split(".")[0] === "upload") {
         // Prepend "/upload" to the pathname if it's not already there
