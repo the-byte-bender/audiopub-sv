@@ -25,7 +25,9 @@
 
 <h1>Upload Audio</h1>
 
-<form use:enhance method="POST" enctype="multipart/form-data">
+<form use:enhance method="POST" enctype="multipart/form-data"
+action={location.hostname === "audiopub.site" ? "https://upload.audiopub.site" : undefined}
+>
   <div class="form-group">
     <label for="title">Title:</label>
     <input
