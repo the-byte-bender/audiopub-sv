@@ -167,7 +167,7 @@ export default class Audio extends Model {
   ): Promise<Audio[]> {
     return Audio.findAll({
       where: Sequelize.literal(
-        `MATCH(title) AGAINST(:query IN NATURAL LANGUAGE MODE) AND isFromAI = :isFromAI`
+        `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE) AND isFromAI = :isFromAI`
       ),
       replacements: { query, isFromAI },
       limit: 30,

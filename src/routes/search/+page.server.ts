@@ -25,8 +25,8 @@ export const load: PageServerLoad = async (event) => {
   const pageString = event.url.searchParams.get("page") as string;
   const page = pageString ? parseInt(pageString) : 1;
   query = query?.trim();
-  if (!query || query.length < 5) {
-    return error(400, "Query must be at least 5 characters long");
+  if (!query || query.length < 3) {
+    return error(400, "Query must be at least 3 characters long");
   }
   const audios = await Audio.search(query, page, event.locals.isFromAi);
   return {
