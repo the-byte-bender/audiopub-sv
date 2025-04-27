@@ -17,13 +17,17 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import { enhance } from "$app/forms";
+    import { formatRelative } from 'date-fns';
     import type { ClientsideComment, ClientsideUser } from "$lib/types";
     import Modal from "./modal.svelte";
+    import { enhance } from "$app/forms";
+
     export let comment: ClientsideComment;
     export let user: ClientsideUser | undefined = undefined;
     export let isAdmin: boolean = false;
     let isDeletionModalVisible: boolean = false;
+
+    $: commentDate = comment ? formatRelative(new Date(comment.createdAt), new Date()) : '';
 </script>
 
 <div class="comment">
@@ -33,6 +37,7 @@
         {/if}
 
         <a href={`/user/${comment.user.id}`}>{comment.user.displayName}</a>
+        <span class="comment-date"> - {commentDate}</span>
     </h3>
     <pre>{comment.content}</pre>
     {#if isAdmin || (user && user.id === comment.user.id)}
@@ -69,6 +74,12 @@
     .comment h3 a {
         color: #007bff;
         text-decoration: none;
+    }
+
+    .comment .comment-date {
+        color: #6c757d; /* A muted color for the date */
+        font-size: 0.9em;
+        margin-left: 0.5em;
     }
 
     .comment pre {
