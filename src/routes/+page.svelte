@@ -32,10 +32,11 @@
       case "createdAt": fieldDesc = "date"; break;
       case "plays": fieldDesc = "play count"; break;
       case "title": fieldDesc = "title"; break;
+      case "random": fieldDesc = "random"; break;
       default: fieldDesc = "date";
     }
-    const orderDesc = data.sortOrder === "DESC" ? "descending" : "ascending";
-    return `${fieldDesc} ${orderDesc}`;
+    const orderDesc = data.sortField === "random" ? "" : data.sortOrder === "DESC" ? "descending" : "ascending";
+    return `${fieldDesc} ${orderDesc}`.trim();
   })();
 </script>
 
@@ -47,14 +48,17 @@
     <option value="createdAt" selected={data.sortField === 'createdAt'}>Date</option>
     <option value="plays" selected={data.sortField === 'plays'}>Play Count</option>
     <option value="title" selected={data.sortField === 'title'}>Title</option>
+    <option value="random" selected={data.sortField === 'random'}>Random</option>
   </select>
   <br />
-  <label for="order">Order:</label>
-  <select name="order" id="order">
-    <option value="DESC" selected={data.sortOrder === 'DESC'}>Descending</option>
-    <option value="ASC" selected={data.sortOrder === 'ASC'}>Ascending</option>
-  </select>
-  <br />
+  {#if data.sortField !== 'random'}
+    <label for="order">Order:</label>
+    <select name="order" id="order">
+      <option value="DESC" selected={data.sortOrder === 'DESC'}>Descending</option>
+      <option value="ASC" selected={data.sortOrder === 'ASC'}>Ascending</option>
+    </select>
+    <br />
+  {/if}
   <button type="submit">Sort</button>
 </form>
 
@@ -65,5 +69,5 @@
   audios={data.audios}
   page={data.page}
   totalPages={data.totalPages}
-  paginationBaseUrl={`/?sort=${data.sortField}&order=${data.sortOrder}`}
+  paginationBaseUrl={`/?sort=${data.sortField}${data.sortField === 'random' ? '' : '&order=' + data.sortOrder}`}
 />

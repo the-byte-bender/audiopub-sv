@@ -18,7 +18,7 @@
  */
 import { Audio, User } from "$lib/server/database";
 import type { PageServerLoad } from "./$types";
-import { type OrderItem } from "sequelize"; // Import OrderItem type
+import { type OrderItem, Sequelize } from "sequelize";
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
@@ -26,18 +26,27 @@ export const load: PageServerLoad = async (event) => {
     const sortField = event.url.searchParams.get("sort") || "createdAt";
     const sortOrder = event.url.searchParams.get("order") || "DESC";
 
-    // Validate sort field and order
-    const validSortFields = ["createdAt", "plays", "title"];
+    const validSortFields = ["createdAt", "plays", "title", "random"];
     const validSortOrders = ["ASC", "DESC"];
-    const validatedSortField = validSortFields.includes(sortField) ? sortField : "createdAt";
-    const validatedSortOrder = validSortOrders.includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : "DESC";
+    const validatedSortField = validSortFields.includes(sortField)
+        ? sortField
+        : "createdAt";
+    const validatedSortOrder = validSortOrders.includes(sortOrder.toUpperCase())
+        ? sortOrder.toUpperCase()
+        : "DESC";
 
     const limit = 30;
     const offset = (page - 1) * limit;
     const isFromAi = event.locals.isFromAi;
 
     // Define the order based on validated parameters
-    const order: OrderItem[] = [[validatedSortField, validatedSortOrder]];
+    let order: OrderItem[] | undefined;
+    if (validatedSortField === "random") {
+        // Use Sequelize.fn('RAND') for MariaDB/MySQL random ordering
+        order = [Sequelize.fn('RAND')];
+    } else {
+        order = [[validatedSortField, validatedSortOrder]];
+    }
 
     const audios = await Audio.findAndCountAll({
         limit,
@@ -45,7 +54,7 @@ export const load: PageServerLoad = async (event) => {
         order,
         include: {
             model: User,
-            where: event.locals.user?.isAdmin? {} : {isTrusted: true}
+            where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
         },
         where: { isFromAi },
     });
@@ -55,7 +64,7 @@ export const load: PageServerLoad = async (event) => {
         page,
         limit,
         totalPages: Math.ceil(audios.count / limit),
-        sortField: validatedSortField, // Pass current sort field
-        sortOrder: validatedSortOrder, // Pass current sort order
+        sortField: validatedSortField,
+        sortOrder: validatedSortOrder,
     };
 };
