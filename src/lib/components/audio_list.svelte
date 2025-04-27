@@ -65,11 +65,11 @@
 {#if totalPages > 1}
   <div class="pagination">
     {#if page > 1}
-      <a href={`${paginationBaseUrl}?page=${page - 1}`}>Previous</a>
+      <a href={`${paginationBaseUrl}${paginationBaseUrl.includes("?") ? "&" : "?"}page=${page - 1}`}>Previous</a>
     {/if}
     <span aria-live="polite">Page {page} of {totalPages}</span>
     {#if page < totalPages}
-      <a href={`${paginationBaseUrl}?page=${page + 1}`}>Next</a>
+      <a href={`${paginationBaseUrl}${paginationBaseUrl.includes("?") ? "&" : "?"}page=${page + 1}`}>Next</a>
     {/if}
   </div>
 {/if}
