@@ -23,19 +23,9 @@ import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
 
 export const load: PageServerLoad = async (event) => {
-    const isFromAi = event.locals.isFromAi;
     const audio = await Audio.findByPk(event.params.id, { include: User });
     if (!audio) {
         return error(404, "Not found");
-    }
-    if (audio.isFromAi !== isFromAi) {
-        return error(
-            404,
-            `this audio is not in this mirror.
-      Please go to ${
-          audio.isFromAi ? "AI trash" : "normal"
-      } website to listen to this audio.`
-        );
     }
     const comments = await Comment.findAll({
         where: { audioId: audio.id },
@@ -66,54 +56,6 @@ export const actions: Actions = {
         await fs.unlink(audio.path);
         await audio.destroy();
         return redirect(303, "/");
-    },
-    move_to_ai: async (event) => {
-        const user = event.locals.user;
-        const audio = await Audio.findByPk(event.params.id, { include: User });
-        if (!audio) {
-            return error(404, "Not found");
-        }
-        if (!user || (!user.isAdmin && user.id !== audio.userId)) {
-            return error(403, "Forbidden");
-        }
-        audio.isFromAi = true;
-        await audio.save();
-        if (user.isAdmin && audio.user) {
-            await sendEmail(
-                audio.user.email,
-                "One of your uploads was sent to the AI trash mirror",
-                `<p>Your audio, "${audio.title}" was moved to the AI trash mirror by an admin.</p>
-        <p>It is now available at <a href="https://ai-trash.audiopub.site/listen/${audio.id}">https://ai-trash.audiopub.site/listen/${audio.id}</a></p>
-      <p>If you think this is a mistake, please contact me.</p>
-      <p> Please note that this is not punishment, but rather a way to keep the main site clean. You can still access your audio and it will still be available to the public, just from a different address.</p>`
-            );
-        }
-        return redirect(
-            303,
-            `https://ai-trash.audiopub.site/listen/${audio.id}`
-        );
-    },
-    move_to_main: async (event) => {
-        const user = event.locals.user;
-        if (!user || !user.isAdmin) {
-            return error(403, "Forbidden");
-        }
-        const audio = await Audio.findByPk(event.params.id, { include: User });
-        if (!audio) {
-            return error(404, "Not found");
-        }
-        audio.isFromAi = false;
-        await audio.save();
-        if (audio.user) {
-            await sendEmail(
-                audio.user.email,
-                "One of your uploads was moved back to the main audiopub",
-                `<p>Your audio, "${audio.title}" was moved back to the main mirror by an admin.</p>
-        <p>It is now available at <a href="https://audiopub.site/listen/${audio.id}">https://audiopub.site/listen/${audio.id}</a></p>
-        <p>We are very sorry for the previous false positive and any inconvenience the move to the AI trash mirror may have caused.</p>`
-            );
-        }
-        return redirect(303, `https://audiopub.site/listen/${audio.id}`);
     },
     add_comment: async (event) => {
         const user = event.locals.user;

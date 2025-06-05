@@ -37,7 +37,6 @@ export const load: PageServerLoad = async (event) => {
 
     const limit = 30;
     const offset = (page - 1) * limit;
-    const isFromAi = event.locals.isFromAi;
 
     // Define the order based on validated parameters
     let order: OrderItem[] | undefined;
@@ -56,7 +55,6 @@ export const load: PageServerLoad = async (event) => {
             model: User,
             where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
         },
-        where: { isFromAi },
     });
     return {
         audios: audios.rows.map((audio) => audio.toClientside()),

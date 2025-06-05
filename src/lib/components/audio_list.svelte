@@ -19,29 +19,11 @@
 <script lang="ts">
   import type { ClientsideAudio } from "$lib/types";
   export let audios: ClientsideAudio[];
-  export let isFromAi: boolean = false;
 
   export let paginationBaseUrl: string = "/";
   export let page: number = 1;
   export let totalPages: number = 0;
 </script>
-
-{#if isFromAi}
-  <div class="warning">
-    <p>
-      <b>WARNING!</b> Every audio you find here was AI-generated and uploaded by
-      other users. We cannot guarantee the quality of the content. It is
-      recommended to visit
-      <a href="https://audiopub.site"
-        >The main audiopub.site for human or mostly human content.</a
-      >
-    </p>
-    <p>
-      If your valid work somehow ended up here by mistake, I deeply apologize.
-      Contact me immediately, and I'll rectify the situation.
-    </p>
-  </div>
-{/if}
 
 <section class="audio-list">
   {#each audios as audio}

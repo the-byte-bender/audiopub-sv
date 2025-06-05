@@ -25,13 +25,12 @@ export const load: PageServerLoad = async (event) => {
     const page = pageString ? parseInt(pageString, 10) : 1;
     const limit = 30;
     const offset = (page - 1) * limit;
-    const isFromAi = event.locals.isFromAi;
     const profileUser = await User.findByPk(event.params.id);
     if (!profileUser) {
         return redirect(303, "/");
     }
     const audios = await Audio.findAndCountAll({
-        where: { userId: profileUser.id, isFromAi },
+        where: { userId: profileUser.id},
         limit,
         offset,
         order: [["createdAt", "DESC"]],

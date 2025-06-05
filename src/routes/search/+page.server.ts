@@ -28,7 +28,7 @@ export const load: PageServerLoad = async (event) => {
   if (!query || query.length < 3) {
     return error(400, "Query must be at least 3 characters long");
   }
-  const audios = await Audio.search(query, page, event.locals.isFromAi);
+  const audios = await Audio.search(query, page);
   return {
     audios: audios.map((audio) => audio.toClientside()),
     query,

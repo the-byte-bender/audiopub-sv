@@ -75,28 +75,6 @@
     >
       <button type="submit"> Permanently delete</button>
     </form>
-
-    {#if !data.isFromAi}
-      <form
-        use:enhance={({ formElement, formData, action, cancel, submitter }) => {
-          if (
-            !confirm(
-              "Are you sure you want to move this audio to AI trash? Only admins can move it back!"
-            )
-          ) {
-            cancel();
-          }
-        }}
-        action="?/move_to_ai"
-        method="POST"
-      >
-        <button type="submit"> Move to the AI trash mirror </button>
-      </form>
-    {:else if data.isAdmin}
-      <form use:enhance action="?/move_to_main" method="POST">
-        <button type="submit"> Move back from the AI trash mirror </button>
-      </form>
-    {/if}
   {/if}
 
   <CommentList
