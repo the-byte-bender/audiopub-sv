@@ -18,7 +18,6 @@
  */
 import { fail, redirect } from "@sveltejs/kit";
 import type { Actions } from "./$types";
-import trustedEmailProviders from "$lib/server/trusted_email_providers";
 import { User } from "$lib/server/database";
 import { hash } from "bcrypt";
 
@@ -35,13 +34,6 @@ export const actions: Actions = {
     username = username.trim();
     // do we trust the email?
     const emailDomain = email.split("@")[1];
-    if (!trustedEmailProviders.includes(emailDomain)) {
-      return fail(400, {
-        email,
-        username,
-        message: "The domain of the email address you provided is not trusted.",
-      });
-    }
     if (password.length < 8 || password.length > 64) {
       return fail(400, {
         email,
