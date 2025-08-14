@@ -17,17 +17,20 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import { formatRelative } from 'date-fns';
+    import { formatRelative } from "date-fns";
     import type { ClientsideComment, ClientsideUser } from "$lib/types";
     import Modal from "./modal.svelte";
     import { enhance } from "$app/forms";
+    import SafeMarkdown from "./safe_markdown.svelte";
 
     export let comment: ClientsideComment;
     export let user: ClientsideUser | undefined = undefined;
     export let isAdmin: boolean = false;
     let isDeletionModalVisible: boolean = false;
 
-    $: commentDate = comment ? formatRelative(new Date(comment.createdAt), new Date()) : '';
+    $: commentDate = comment
+        ? formatRelative(new Date(comment.createdAt), new Date())
+        : "";
 </script>
 
 <div class="comment">
@@ -39,7 +42,7 @@
         <a href={`/user/${comment.user.id}`}>{comment.user.displayName}</a>
         <span class="comment-date"> - {commentDate}</span>
     </h3>
-    <pre>{comment.content}</pre>
+    <SafeMarkdown source={comment.content} />
     {#if isAdmin || (user && user.id === comment.user.id)}
         <div id="comment-actions">
             <button on:click={() => (isDeletionModalVisible = true)}
