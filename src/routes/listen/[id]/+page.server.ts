@@ -27,21 +27,53 @@ import {
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
+import { Op } from "sequelize";
 
 export const load: PageServerLoad = async (event) => {
     const audio = await Audio.findByPk(event.params.id, { include: User });
     if (!audio) {
         return error(404, "Not found");
     }
+
     const comments = await Comment.findAll({
         where: { audioId: audio.id },
         include: {
             model: User,
             where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
         },
-
         order: [["createdAt", "ASC"]],
     });
+
+    if (event.locals.user) {
+        const relatedCommentIds = comments.map((c) => c.id);
+
+        const whereClause: any = {
+            userId: event.locals.user.id,
+            readAt: null,
+        };
+
+        const orConditions: any[] = [
+            {
+                targetType: "audio",
+                targetId: audio.id,
+            },
+        ];
+
+        if (relatedCommentIds.length > 0) {
+            orConditions.push({
+                targetType: "comment",
+                targetId: { [Op.in]: relatedCommentIds },
+            });
+        }
+
+        whereClause[Op.or] = orConditions;
+
+        await Notification.update(
+            { readAt: new Date() },
+            { where: whereClause }
+        );
+    }
+
     const isFollowing = event.locals.user
         ? !!(await AudioFollow.findOne({
               where: { userId: event.locals.user.id, audioId: audio.id } as any,
