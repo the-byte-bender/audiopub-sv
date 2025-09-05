@@ -1,7 +1,7 @@
 <!--
   This file is part of the audiopub project.
   
-  Copyright (C) 2024 the-byte-bender
+  Copyright (C) 2025 the-byte-bender
   
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU Affero General Public License as published by
@@ -59,6 +59,23 @@
         </p>
     {/if}
     <p>Upload date: {new Date(data.audio.createdAt).toLocaleDateString()}</p>
+    {#if data.user}
+        {#if data.audio.user && data.audio.user.id !== data.user.id}
+            {#if data.isFollowing}
+                <form use:enhance action="?/unfollow" method="POST">
+                    <button type="submit"
+                        >Unfollow notifications from this audio</button
+                    >
+                </form>
+            {:else}
+                <form use:enhance action="?/follow" method="POST">
+                    <button type="submit"
+                        >Follow notifications from this audio</button
+                    >
+                </form>
+            {/if}
+        {/if}
+    {/if}
     {#if data.audio.description}
         <h2>Description:</h2>
         <SafeMarkdown source={data.audio.description} />
@@ -154,14 +171,6 @@
     .audio-details h2 {
         margin-top: 1rem;
         color: #333;
-    }
-
-    .audio-details pre {
-        white-space: pre-wrap;
-        background-color: #fff;
-        padding: 0.5rem;
-        border: 1px solid #ccc;
-        border-radius: 4px;
     }
 
     /* Styling for the delete and move buttons */

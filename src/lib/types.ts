@@ -1,6 +1,6 @@
 /*
  * This file is part of the audiopub project.
- * 
+ *
  * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,33 +17,56 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 export interface ClientsideUser {
-  id: string;
-  name: string;
-  displayName: string;
-  isBanned: boolean;
-  isVerified: boolean;
-  isTrusted: boolean;
+    id: string;
+    name: string;
+    displayName: string;
+    isBanned: boolean;
+    isVerified: boolean;
+    isTrusted: boolean;
 }
 
 export interface ClientsideAudio {
-  id: string;
-  title: string;
-  description: string;
-  extension: string;
-  path: string;
-  transcodedPath: string;
-  url: string;
-  plays: number;
-  playsString: string;
-  createdAt: number;
-  user?: ClientsideUser;
+    id: string;
+    title: string;
+    description: string;
+    extension: string;
+    path: string;
+    transcodedPath: string;
+    url: string;
+    plays: number;
+    playsString: string;
+    createdAt: number;
+    user?: ClientsideUser;
 }
 
 export interface ClientsideComment {
-  id: string;
-  content: string;
-  createdAt: number;
-  updatedAt: number;
-  user: ClientsideUser;
-  audio?: ClientsideAudio;
+    id: string;
+    content: string;
+    createdAt: number;
+    updatedAt: number;
+    user: ClientsideUser;
+    audio?: ClientsideAudio;
+}
+
+export enum NotificationType {
+    comment = "comment",
+    upload = "upload",
+    system = "system",
+}
+
+export enum NotificationTargetType {
+    audio = "audio",
+    comment = "comment",
+}
+
+export interface ClientsideResolvedNotification {
+    id: string;
+    userId: string | null;
+    type: NotificationType;
+    targetType: NotificationTargetType;
+    target?: ClientsideAudio | ClientsideComment|null;
+    metadata?: any;
+    actor?: ClientsideUser;
+    readAt?: number;
+    createdAt: number;
 }
