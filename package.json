@@ -11,6 +11,7 @@
 		"db:migrate": "sequelize-cli db:migrate",
 		"db:migrate:undo": "sequelize-cli db:migrate:undo",
 		"db:create:migration": "sequelize-cli migration:generate --name",
+		"db:fix:migration": "find src/lib/server/database/migrations -name '*.js' -exec sh -c 'mv \"$1\" \"${1%.js}.cjs\"' _ {} \\;",
 		"db:seed": "sequelize-cli db:seed:all",
 		"db:seed:undo": "sequelize-cli db:seed:undo:all"
 	},
