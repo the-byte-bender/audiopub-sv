@@ -1,7 +1,7 @@
 <!--
   This file is part of the audiopub project.
   
-  Copyright (C) 2024 the-byte-bender
+  Copyright (C) 2025 the-byte-bender
   
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU Affero General Public License as published by
@@ -19,31 +19,110 @@
 <script lang="ts">
     import type { ClientsideAudio } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
+    import AudioItem from "./audio_item.svelte";
     export let audios: ClientsideAudio[];
+    export let groupThreshold: number = 3;
 
     export let paginationBaseUrl: string = "/";
     export let page: number = 1;
     export let totalPages: number = 0;
+
+    type AudioGroup = {
+        isGroup: true;
+        user: NonNullable<ClientsideAudio["user"]>;
+        audios: ClientsideAudio[];
+        id: string;
+    };
+
+    let processedList: (ClientsideAudio | AudioGroup)[] = [];
+
+    let expandedGroups = new Map<string, boolean>();
+
+    function toggleGroup(id: string) {
+        expandedGroups.set(id, !expandedGroups.get(id));
+        expandedGroups = expandedGroups;
+    }
+
+    $: paginationQuerySeparator = paginationBaseUrl.includes("?") ? "&" : "?";
+
+    $: {
+        if (groupThreshold > 0 && audios?.length > 0) {
+            const newList: (ClientsideAudio | AudioGroup)[] = [];
+            let i = 0;
+            while (i < audios.length) {
+                const currentAudio = audios[i];
+                const currentUser = currentAudio.user;
+
+                if (!currentUser) {
+                    newList.push(currentAudio);
+                    i++;
+                    continue;
+                }
+
+                let j = i + 1;
+                while (
+                    j < audios.length &&
+                    audios[j].user?.id === currentUser.id
+                ) {
+                    j++;
+                }
+
+                const consecutiveAudios = audios.slice(i, j);
+                const count = consecutiveAudios.length;
+
+                if (count > groupThreshold) {
+                    const itemsToShow = Math.max(1, groupThreshold - 1);
+
+                    newList.push(...consecutiveAudios.slice(0, itemsToShow));
+
+                    const groupId = `${currentUser.id}-${i}`;
+                    newList.push({
+                        isGroup: true,
+                        user: currentUser,
+                        audios: consecutiveAudios.slice(itemsToShow),
+                        id: groupId,
+                    });
+
+                    if (!expandedGroups.has(groupId)) {
+                        expandedGroups.set(groupId, false);
+                    }
+                } else {
+                    newList.push(...consecutiveAudios);
+                }
+                i = j;
+            }
+            processedList = newList;
+        } else {
+            processedList = audios || [];
+        }
+    }
 </script>
 
 <section class="audio-list">
-    {#each audios as audio}
-        <article class="audio-item">
-            <h3>
-                {#if audio.user && !audio.user.isTrusted}
-                    <span style="color: red">(Pending review)</span> |{" "}
-                {/if}
-                <a href={`/listen/${audio.id}`}>{audio.title}</a>| {audio.playsString}
-            </h3>
-            {#if audio.user}
-                <p>
-                    By <a href={`/user/${audio.user.id}`}
-                        >{audio.user.displayName}</a
+    {#each processedList as item (item.id)}
+        {#if "isGroup" in item}
+            <div class="audio-group">
+                <h4>
+                    <button
+                        class="expand-button"
+                        on:click={() => toggleGroup(item.id)}
+                        aria-expanded={expandedGroups.get(item.id)
+                            ? "true"
+                            : "false"}
                     >
-                </p>
-            {/if}
-            <SafeMarkdown source={audio.description} />
-        </article>
+                        And {item.audios.length} more by {item.user.displayName}
+                    </button>
+                </h4>
+                {#if expandedGroups.get(item.id)}
+                    {#each item.audios as audio (audio.id)}
+                        <AudioItem {audio} />
+                    {/each}
+                {/if}
+            </div>
+        {:else}
+            {@const audio = item}
+            <AudioItem {audio} />
+        {/if}
     {/each}
 </section>
 
@@ -51,14 +130,14 @@
     <div class="pagination">
         {#if page > 1}
             <a
-                href={`${paginationBaseUrl}${paginationBaseUrl.includes("?") ? "&" : "?"}page=${page - 1}`}
+                href={`${paginationBaseUrl}${paginationQuerySeparator}page=${page - 1}`}
                 >Previous</a
             >
         {/if}
         <span aria-live="polite">Page {page} of {totalPages}</span>
         {#if page < totalPages}
             <a
-                href={`${paginationBaseUrl}${paginationBaseUrl.includes("?") ? "&" : "?"}page=${page + 1}`}
+                href={`${paginationBaseUrl}${paginationQuerySeparator}page=${page + 1}`}
                 >Next</a
             >
         {/if}
@@ -66,21 +145,8 @@
 {/if}
 
 <style>
-    .warning {
-        background-color: #ffe8e8;
-        border: 1px solid #ff8888;
-        padding: 10px;
-        margin-bottom: 20px;
-    }
-
     .audio-list {
         margin-top: 20px;
-    }
-
-    .audio-item {
-        margin-bottom: 20px;
-        border: 1px solid #ccc;
-        padding: 10px;
     }
 
     .pagination {
@@ -89,5 +155,24 @@
 
     .pagination a {
         margin-right: 10px;
+    }
+
+    .audio-group h4 {
+        margin-bottom: 10px;
+        font-weight: normal;
+    }
+
+    .expand-button {
+        background: none;
+        border: none;
+        color: var(--text-link-color);
+        cursor: pointer;
+        padding: 0;
+        font-size: inherit;
+        font-weight: bold;
+    }
+
+    .expand-button:hover {
+        text-decoration: underline;
     }
 </style>
