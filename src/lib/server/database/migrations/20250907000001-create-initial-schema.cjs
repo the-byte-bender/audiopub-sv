@@ -302,15 +302,10 @@ module.exports = {
       name: 'audios_title_description_fulltext_idx'
     });
 
-    await queryInterface.addIndex('Notifications', ['userId']);
-    await queryInterface.addIndex('Notifications', ['actorId']);
     await queryInterface.addIndex('Notifications', ['type']);
     await queryInterface.addIndex('Notifications', ['targetType']);
     await queryInterface.addIndex('Notifications', ['targetId']);
     await queryInterface.addIndex('Notifications', ['readAt']);
-
-    await queryInterface.addIndex('AudioFollows', ['userId']);
-    await queryInterface.addIndex('AudioFollows', ['audioId']);
 
     // Add unique constraint for AudioFollows
     await queryInterface.addConstraint('AudioFollows', {
