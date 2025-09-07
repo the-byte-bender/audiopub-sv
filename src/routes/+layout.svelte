@@ -1,7 +1,7 @@
 <!--
   This file is part of the audiopub project.
   
-  Copyright (C) 2024 the-byte-bender
+  Copyright (C) 2025 the-byte-bender
   
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU Affero General Public License as published by
@@ -19,14 +19,85 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import title from "$lib/title";
-    import { onMount } from "svelte";
+    import { onDestroy, onMount } from "svelte";
     import type { LayoutData } from "./$types";
 
     export let data: LayoutData;
+
+    let unreadCount = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let backoffMs = 60000;
+    const maxBackoff = 5 * 60_000;
+    const minBackoff = 30_000;
+    let inFlight = false;
+    let lastFetchTs = 0;
+    const MIN_IMMEDIATE_INTERVAL = 20000;
+
+    async function refreshUnread() {
+        if (!data.user) return;
+        if (document.visibilityState === "hidden") return;
+        if (inFlight) return;
+        try {
+            inFlight = true;
+            const ctrl = new AbortController();
+            const id = setTimeout(() => ctrl.abort(), 8000);
+            const res = await fetch("/notifications", {
+                signal: ctrl.signal,
+                headers: { "cache-control": "no-cache" },
+            });
+            clearTimeout(id);
+            if (!res.ok) throw new Error(String(res.status));
+            const body = await res.json();
+            unreadCount = Number(body?.unread ?? 0) || 0;
+            backoffMs = 60000;
+        } catch (e) {
+            backoffMs = Math.min(
+                Math.max(backoffMs * 2, minBackoff),
+                maxBackoff
+            );
+        } finally {
+            lastFetchTs = Date.now();
+            inFlight = false;
+        }
+    }
+
+    function scheduleNext() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(async () => {
+            await refreshUnread();
+            scheduleNext();
+        }, backoffMs);
+    }
+
+    function kickImmediate() {
+        const now = Date.now();
+        if (inFlight) return;
+        if (now - lastFetchTs < MIN_IMMEDIATE_INTERVAL) return;
+        refreshUnread();
+    }
+
+    onMount(() => {
+        refreshUnread().finally(scheduleNext);
+        const onVis = () =>
+            document.visibilityState === "visible" && kickImmediate();
+        const onFocus = () => kickImmediate();
+        document.addEventListener("visibilitychange", onVis);
+        window.addEventListener("focus", onFocus);
+        return () => {
+            document.removeEventListener("visibilitychange", onVis);
+            window.removeEventListener("focus", onFocus);
+        };
+    });
+
+    onDestroy(() => {
+        if (timer) clearTimeout(timer);
+    });
 </script>
 
 <svelte head>
-    <title>{$title} | audiopub</title>
+    <title
+        >{unreadCount > 0 ? `(${unreadCount}) ` : ""}{$title} | audiopub</title
+    >
 </svelte>
 
 <header>
@@ -40,6 +111,16 @@
                 </p>
                 <a href="/verify">Verify</a>
             {:else}
+                <a href="/notifications" class="notifications-link">
+                    Notifications
+                    {#if unreadCount > 0}
+                        <span
+                            class="badge"
+                            aria-label={`${unreadCount} unread notifications`}
+                            >{unreadCount}</span
+                        >
+                    {/if}
+                </a>
                 <a href="/upload">Upload</a>
                 <a href="/profile">Profile</a>
                 <a href="/logout">Logout</a>
@@ -98,6 +179,23 @@
 
     nav a:hover {
         color: #000;
+    }
+
+    .notifications-link {
+        font-weight: 600;
+        position: relative;
+    }
+    .badge {
+        margin-left: 0.4rem;
+        background: #d00;
+        color: #fff;
+        border-radius: 999px;
+        padding: 0 0.45rem;
+        font-size: 0.8rem;
+        line-height: 1.2rem;
+        display: inline-block;
+        min-width: 1.2rem;
+        text-align: center;
     }
 
     main {

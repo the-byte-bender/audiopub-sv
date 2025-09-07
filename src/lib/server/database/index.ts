@@ -1,6 +1,6 @@
 /*
  * This file is part of the audiopub project.
- * 
+ *
  * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
@@ -22,29 +22,31 @@ import User from "./models/user";
 import Audio from "./models/audio";
 import Comment from "./models/comment";
 import PlaysTracker from "./models/plays_tracker";
+import Notification from "./models/notification";
+import AudioFollow from "./models/audio_follow";
 dotenv.config();
 
 if (
-  !process.env.DATABASE_NAME ||
-  !process.env.DATABASE_USER ||
-  !process.env.DATABASE_PASSWORD
+    !process.env.DATABASE_NAME ||
+    !process.env.DATABASE_USER ||
+    !process.env.DATABASE_PASSWORD
 ) {
-  throw new Error(
-    "Please set DATABASE_NAME, DATABASE_USER, and DATABASE_PASSWORD in .env file"
-  );
+    throw new Error(
+        "Please set DATABASE_NAME, DATABASE_USER, and DATABASE_PASSWORD in .env file"
+    );
 }
 
 const database = new Sequelize({
-  database: process.env.DATABASE_NAME,
-  dialect: "mariadb",
-  username: process.env.DATABASE_USER,
-  password: process.env.DATABASE_PASSWORD,
-  models: [User, Audio, Comment, PlaysTracker],
-  logging: false,
-  host: "127.0.0.1",
-  port: 3306,
+    database: process.env.DATABASE_NAME,
+    dialect: "mariadb",
+    username: process.env.DATABASE_USER,
+    password: process.env.DATABASE_PASSWORD,
+    models: [User, Audio, Comment, PlaysTracker, Notification, AudioFollow],
+    logging: false,
+    host: "127.0.0.1",
+    port: 3306,
 });
 
 export default database;
 
-export { User, Audio, Comment, PlaysTracker };
+export { User, Audio, Comment, PlaysTracker, Notification, AudioFollow };

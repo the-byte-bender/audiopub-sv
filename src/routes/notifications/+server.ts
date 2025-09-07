@@ -1,6 +1,6 @@
 /*
  * This file is part of the audiopub project.
- * 
+ *
  * Copyright (C) 2025 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,28 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import type { LayoutServerLoad } from "./$types";
+import type { RequestHandler } from "./$types";
+import { json } from "@sveltejs/kit";
+import { Notification, User } from "$lib/server/database";
+import { Op } from "sequelize";
 
-export const load: LayoutServerLoad = (event) => {
-  return {
-    user: event.locals.user?.toClientside(),
-    isAdmin: (event.locals.user?.isAdmin) ?? false,
-  };
+export const GET: RequestHandler = async ({ locals }) => {
+    const user = locals.user;
+    if (!user) return json({ unread: 0 });
+    const unread = await Notification.count({
+        where: {
+            userId: user.id,
+            readAt: null,
+            [Op.or]: [{ "$actor.isTrusted$": true }, { actorId: null }],
+        },
+        include: [
+            {
+                model: User,
+                as: "actor",
+                required: false,
+                attributes: ["isTrusted"],
+            },
+        ],
+    });
+    return json({ unread });
 };

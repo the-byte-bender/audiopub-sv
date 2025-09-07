@@ -7,13 +7,20 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"db:migrate": "sequelize-cli db:migrate",
+		"db:migrate:undo": "sequelize-cli db:migrate:undo",
+		"db:create:migration": "sequelize-cli migration:generate --name",
+		"db:fix:migration": "find src/lib/server/database/migrations -name '*.js' -exec sh -c 'mv \"$1\" \"${1%.js}.cjs\"' _ {} \\;",
+		"db:seed": "sequelize-cli db:seed:all",
+		"db:seed:undo": "sequelize-cli db:seed:undo:all"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^3.0.0",
 		"@sveltejs/adapter-node": "^5.2.0",
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^3.0.0",
+		"sequelize-cli": "^6.6.3",
 		"svelte": "^5.38.1",
 		"svelte-check": "^3.6.0",
 		"tslib": "^2.4.1",

@@ -1,7 +1,7 @@
 /*
  * This file is part of the audiopub project.
  *
- * Copyright (C) 2024 the-byte-bender
+ * Copyright (C) 2025 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -17,29 +17,74 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 import fs from "fs/promises";
-import { Audio, Comment, User } from "$lib/server/database";
+import {
+    Audio,
+    Comment,
+    User,
+    AudioFollow,
+    Notification,
+} from "$lib/server/database";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
+import { Op } from "sequelize";
 
 export const load: PageServerLoad = async (event) => {
     const audio = await Audio.findByPk(event.params.id, { include: User });
     if (!audio) {
         return error(404, "Not found");
     }
+
     const comments = await Comment.findAll({
         where: { audioId: audio.id },
         include: {
             model: User,
             where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
         },
-
         order: [["createdAt", "ASC"]],
     });
+
+    if (event.locals.user) {
+        const relatedCommentIds = comments.map((c) => c.id);
+
+        const whereClause: any = {
+            userId: event.locals.user.id,
+            readAt: null,
+        };
+
+        const orConditions: any[] = [
+            {
+                targetType: "audio",
+                targetId: audio.id,
+            },
+        ];
+
+        if (relatedCommentIds.length > 0) {
+            orConditions.push({
+                targetType: "comment",
+                targetId: { [Op.in]: relatedCommentIds },
+            });
+        }
+
+        whereClause[Op.or] = orConditions;
+
+        await Notification.update(
+            { readAt: new Date() },
+            { where: whereClause }
+        );
+    }
+
+    const isFollowing = event.locals.user
+        ? !!(await AudioFollow.findOne({
+              where: { userId: event.locals.user.id, audioId: audio.id } as any,
+          }))
+        : false;
+
     return {
         audio: audio.toClientside(),
         comments: comments.map((c) => c.toClientside(false)),
         mimeType: audio.mimeType,
+        isFollowing,
     };
 };
 
@@ -82,6 +127,23 @@ export const actions: Actions = {
             audioId: audio.id,
             content: comment,
         });
+        const followers = await AudioFollow.findAll({
+            where: { audioId: audio.id } as any,
+        });
+        const followerIds = new Set<string>(followers.map((f) => f.userId));
+        if (audio.userId) followerIds.add(audio.userId);
+        followerIds.delete(user.id);
+        const payloads = Array.from(followerIds).map((uid) => ({
+            userId: uid,
+            actorId: user.id,
+            type: "comment" as const,
+            targetType: "comment" as const,
+            targetId: commentInDatabase.id,
+            metadata: { audioId: audio.id },
+        }));
+        if (payloads.length) {
+            await Notification.bulkCreate(payloads as any);
+        }
         return { success: true };
     },
     delete_comment: async (event) => {
@@ -100,6 +162,32 @@ export const actions: Actions = {
             return error(403, "Forbidden");
         }
         await comment.destroy();
+        return { success: true };
+    },
+    follow: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isVerified || user.isBanned)
+            return error(403, "Forbidden");
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) return error(404, "Not found");
+        if (audio.userId === user.id) return { success: true };
+        const existing = await AudioFollow.findOne({
+            where: { userId: user.id, audioId: audio.id } as any,
+        });
+        if (!existing) {
+            await AudioFollow.create({ userId: user.id, audioId: audio.id });
+        }
+        return { success: true };
+    },
+    unfollow: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isVerified || user.isBanned)
+            return error(403, "Forbidden");
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) return error(404, "Not found");
+        await AudioFollow.destroy({
+            where: { userId: user.id, audioId: audio.id } as any,
+        });
         return { success: true };
     },
 };
