@@ -18,7 +18,7 @@
  */
 
 import type { Actions, PageServerLoad } from "./$types";
-import { Notification } from "$lib/server/database";
+import { Notification, User } from "$lib/server/database";
 import { Op } from "sequelize";
 
 export const load: PageServerLoad = async (event) => {
@@ -28,9 +28,22 @@ export const load: PageServerLoad = async (event) => {
     }
 
     const list = await Notification.findAll({
-        where: { [Op.or]: [{ userId: user.id }, { userId: null }] } as any,
+        where: {
+            [Op.and]: [
+                { [Op.or]: [{ userId: user.id }, { userId: null }] },
+                { [Op.or]: [{ "$actor.isTrusted$": true }, { actorId: null }] },
+            ],
+        },
         order: [["createdAt", "DESC"]],
         limit: 100,
+        include: [
+            {
+                model: User,
+                as: "actor",
+                required: false,
+                attributes: ["isTrusted"],
+            },
+        ],
     });
 
     const resolved = await Notification.resolveMany(list);
@@ -38,7 +51,7 @@ export const load: PageServerLoad = async (event) => {
     const now = new Date();
     await Notification.update(
         { readAt: now },
-        { where: { userId: user.id, readAt: null } as any }
+        { where: { userId: user.id, readAt: null } }
     );
 
     return { notifications: resolved };
@@ -55,10 +68,10 @@ export const actions: Actions = {
         const user = event.locals.user;
         if (!user) return { success: false };
         const form = await event.request.formData();
-        const id = form.get('id') as string;
+        const id = form.get("id") as string;
         if (!id) return { success: false };
 
         await Notification.destroy({ where: { id, userId: user.id } as any });
         return { success: true };
-    }
+    },
 };
