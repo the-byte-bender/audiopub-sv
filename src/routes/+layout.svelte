@@ -106,6 +106,7 @@
 <header>
     <nav>
         <a href="/">Home</a>
+        <a href="/quickfeed">Quickfeed</a>
         {#if data.user}
             {#if !data.user.isVerified}
                 <p>

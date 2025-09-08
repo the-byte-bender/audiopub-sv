@@ -39,6 +39,7 @@ export interface ClientsideAudio {
     isFavorited?: boolean;
     createdAt: number;
     user?: ClientsideUser;
+    comments?: ClientsideComment[];
 }
 
 export interface ClientsideComment {
