@@ -28,9 +28,11 @@ import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
-import { Op } from "sequelize";
+import { Op, Sequelize } from "sequelize";
+
 
 export const load: PageServerLoad = async (event) => {
+    // Query 1: Get audio with user
     const audio = await Audio.findByPk(event.params.id, { include: User });
     if (!audio) {
         return error(404, "Not found");
