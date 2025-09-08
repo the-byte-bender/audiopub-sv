@@ -32,18 +32,13 @@
 </script>
 
 <article class="audio-item">
-    <div class="audio-header">
-        <h3 aria-describedby="audio-stats-{audio.id}">
-            {#if audio.user && !audio.user.isTrusted}
-                <span style="color: red">(Pending review)</span> |{" "}
-            {/if}
-            <a href={`/listen/${audio.id}`}>{audio.title}</a>
-        </h3>
-        <div class="audio-stats" id="audio-stats-{audio.id}">
-            <span class="plays">{audio.playsString}</span>
-            with <span class="favorites">{favoritesString}</span>
-        </div>
-    </div>
+    <h3>
+        {#if audio.user && !audio.user.isTrusted}
+            <span style="color: red">(Pending review)</span> |{" "}
+        {/if}
+        <a href={`/listen/${audio.id}`}>{audio.title}</a>
+        <span class="stats"> | {audio.playsString} | {favoritesString})</span>
+    </h3>
     {#if audio.user}
         <p>
             By <a href={`/user/${audio.user.id}`}>{audio.user.displayName}</a>
@@ -52,11 +47,6 @@
     <SafeMarkdown source={audio.description} />
 </article>
 
-<!--
- Copyright 2025 the-byte-bender.
- SPDX-License-Identifier: MPL-2.0
--->
-
 <style>
     .audio-item {
         margin-bottom: 20px;
@@ -64,32 +54,15 @@
         padding: 10px;
     }
 
-    .audio-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 8px;
+    h3 {
+        margin: 0 0 8px 0;
     }
 
-    .audio-header h3 {
-        margin: 0;
-        flex: 1;
-        min-width: 200px;
-    }
-
-    .audio-stats {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-shrink: 0;
-    }
-
-    .plays,
-    .favorites {
+    .stats {
         color: #666;
-        font-size: 14px;
+        font-size: 0.9em;
+        font-weight: normal;
+        margin-left: 0.5em;
         white-space: nowrap;
     }
 </style>
