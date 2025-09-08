@@ -19,6 +19,7 @@
 import { error } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { Audio } from "$lib/server/database";
+import AudioFavorite from "$lib/server/database/models/audio_favorite";
 
 export const load: PageServerLoad = async (event) => {
   let query = event.url.searchParams.get("q") as string;
@@ -29,8 +30,61 @@ export const load: PageServerLoad = async (event) => {
     return error(400, "Query must be at least 3 characters long");
   }
   const audios = await Audio.search(query, page);
+  
+  // Get favorite counts and user favorite status (with error handling)
+  const audioIds = audios.map(audio => audio.id);
+  const currentUser = event.locals.user;
+  
+  let favoriteCounts = new Map();
+  let userFavorites = new Set();
+
+  try {
+    // Only fetch favorite data if there are audios to process
+    if (audioIds.length > 0) {
+      const favoriteData = await Promise.all([
+        // Get individual counts for each audio
+        Promise.all(audioIds.map(async (audioId) => {
+          try {
+            const count = await AudioFavorite.getFavoriteCount(audioId);
+            return { audioId, count };
+          } catch (err) {
+            console.error(`Error getting favorite count for audio ${audioId}:`, err);
+            return { audioId, count: 0 };
+          }
+        })),
+        // Get user favorites
+        currentUser ? (async () => {
+          try {
+            const results = await AudioFavorite.findAll({
+              where: { 
+                userId: currentUser.id,
+                audioId: audioIds 
+              },
+              attributes: ['audioId']
+            });
+            return new Set(results.map(r => r.audioId));
+          } catch (err) {
+            console.error('Error getting user favorites:', err);
+            return new Set();
+          }
+        })() : Promise.resolve(new Set())
+      ]);
+
+      // Process results
+      favoriteCounts = new Map(favoriteData[0].map(item => [item.audioId, item.count]));
+      userFavorites = favoriteData[1];
+    }
+  } catch (err) {
+    console.error('Error fetching favorite data:', err);
+    // Continue without favorite data
+  }
+
   return {
-    audios: audios.map((audio) => audio.toClientside()),
+    audios: audios.map((audio) => {
+      const favoriteCount = favoriteCounts.get(audio.id) || 0;
+      const isFavorited = userFavorites.has(audio.id);
+      return audio.toClientside(true, favoriteCount, isFavorited);
+    }),
     query,
     page,
   };

@@ -37,18 +37,21 @@
         if (!data.user) return;
         if (document.visibilityState === "hidden") return;
         if (inFlight) return;
+        
         try {
             inFlight = true;
             const ctrl = new AbortController();
-            const id = setTimeout(() => ctrl.abort(), 8000);
+            const timeoutId = setTimeout(() => ctrl.abort(), 8000);
             const res = await fetch("/notifications", {
                 signal: ctrl.signal,
                 headers: { "cache-control": "no-cache" },
             });
-            clearTimeout(id);
+            clearTimeout(timeoutId);
             if (!res.ok) throw new Error(String(res.status));
             const body = await res.json();
             unreadCount = Number(body?.unread ?? 0) || 0;
+            
+            // Reset backoff on success
             backoffMs = 60000;
         } catch (e) {
             backoffMs = Math.min(
@@ -121,6 +124,7 @@
                         >
                     {/if}
                 </a>
+                <a href="/favorites">Favorites</a>
                 <a href="/upload">Upload</a>
                 <a href="/profile">Profile</a>
                 <a href="/logout">Logout</a>

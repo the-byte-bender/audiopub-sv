@@ -17,11 +17,12 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import type { ClientsideAudio } from "$lib/types";
+    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
     import AudioItem from "./audio_item.svelte";
     export let audios: ClientsideAudio[];
     export let groupThreshold: number = 3;
+    export let currentUser: ClientsideUser | null = null;
 
     export let paginationBaseUrl: string = "/";
     export let page: number = 1;
@@ -115,13 +116,13 @@
                 </h4>
                 {#if expandedGroups.get(item.id)}
                     {#each item.audios as audio (audio.id)}
-                        <AudioItem {audio} />
+                        <AudioItem {audio} {currentUser} />
                     {/each}
                 {/if}
             </div>
         {:else}
             {@const audio = item}
-            <AudioItem {audio} />
+            <AudioItem {audio} {currentUser} />
         {/if}
     {/each}
 </section>

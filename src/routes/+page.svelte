@@ -21,7 +21,6 @@
     import AudioList from "$lib/components/audio_list.svelte";
     import type { PageData } from "./$types";
     import { onMount } from "svelte";
-    import { enhance } from "$app/forms";
 
     export let data: PageData;
     title.set("Home");
@@ -56,7 +55,7 @@
 
 <h1>Welcome to Audiopub</h1>
 
-<form use:enhance method="GET" action="/">
+<form method="GET" action="/">
     <label for="sort">Sort by:</label>
     <select name="sort" id="sort">
         <option value="createdAt" selected={data.sortField === "createdAt"}
@@ -94,5 +93,6 @@
     audios={data.audios}
     page={data.page}
     totalPages={data.totalPages}
+    currentUser={data.user}
     paginationBaseUrl={`/?sort=${data.sortField}${data.sortField === "random" ? "" : "&order=" + data.sortOrder}`}
 />

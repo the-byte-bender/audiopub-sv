@@ -17,19 +17,33 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import type { ClientsideAudio } from "$lib/types";
+    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
 
     export let audio: ClientsideAudio;
+    export let currentUser: ClientsideUser | null = null;
+
+    $: favoritesString = (() => {
+        const count = audio.favoriteCount || 0;
+        if (count === 0) return "No favorites";
+        if (count === 1) return "1 favorite";
+        return `${count} favorites`;
+    })();
 </script>
 
 <article class="audio-item">
-    <h3>
-        {#if audio.user && !audio.user.isTrusted}
-            <span style="color: red">(Pending review)</span> |{" "}
-        {/if}
-        <a href={`/listen/${audio.id}`}>{audio.title}</a>| {audio.playsString}
-    </h3>
+    <div class="audio-header">
+        <h3>
+            {#if audio.user && !audio.user.isTrusted}
+                <span style="color: red">(Pending review)</span> |{" "}
+            {/if}
+            <a href={`/listen/${audio.id}`}>{audio.title}</a>
+        </h3>
+        <div class="audio-stats">
+            <span class="plays">{audio.playsString}</span>
+            <span class="favorites">{favoritesString}</span>
+        </div>
+    </div>
     {#if audio.user}
         <p>
             By <a href={`/user/${audio.user.id}`}>{audio.user.displayName}</a>
@@ -47,5 +61,33 @@
         margin-bottom: 20px;
         border: 1px solid #ccc;
         padding: 10px;
+    }
+
+    .audio-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .audio-header h3 {
+        margin: 0;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .audio-stats {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+    }
+
+    .plays, .favorites {
+        color: #666;
+        font-size: 14px;
+        white-space: nowrap;
     }
 </style>

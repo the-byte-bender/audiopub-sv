@@ -28,6 +28,13 @@
     const handlePlay = () => {
         fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" });
     };
+
+    $: favoritesString = (() => {
+        const count = data.audio.favoriteCount || 0;
+        if (count === 0) return "No favorites";
+        if (count === 1) return "1 favorite";
+        return `${count} favorites`;
+    })();
 </script>
 
 <h1>{data.audio.title}</h1>
@@ -50,7 +57,31 @@
 </div>
 
 <div class="audio-details">
-    <p>{data.audio.playsString}</p>
+    <div class="audio-stats">
+        <span>{data.audio.playsString}</span>
+        <span>{favoritesString}</span>
+{#if data.user}
+            {#if data.audio.isFavorited}
+                <form use:enhance action="?/unfavorite" method="POST">
+                    <button type="submit" class="favorite-button favorited">
+                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        Remove from favorites
+                    </button>
+                </form>
+            {:else}
+                <form use:enhance action="?/favorite" method="POST">
+                    <button type="submit" class="favorite-button">
+                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        Add to favorites
+                    </button>
+                </form>
+            {/if}
+        {/if}
+    </div>
     {#if data.audio.user}
         <p>
             Uploaded by: <a href="/user/{data.audio.user.id}"
@@ -159,6 +190,50 @@
         border-radius: 8px;
         padding: 1rem;
         background-color: #f9f9f9;
+    }
+
+    /* Styling for the audio stats (plays and favorites) */
+    .audio-stats {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 12px;
+    }
+
+    .audio-stats span {
+        font-weight: 500;
+        color: #666;
+    }
+
+    /* Favorite button styling */
+    .favorite-button {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+        color: #666;
+        font-size: 14px;
+        transition: all 0.2s ease;
+    }
+
+    .favorite-button:hover {
+        border-color: #ff6b6b;
+        color: #ff6b6b;
+        background-color: rgba(255, 107, 107, 0.1);
+    }
+
+    .favorite-button.favorited {
+        color: #ff6b6b;
+        border-color: #ff6b6b;
+        background-color: rgba(255, 107, 107, 0.1);
+    }
+
+    .favorite-button .heart-icon {
+        flex-shrink: 0;
     }
 
     /* Styling for the uploaded by link */

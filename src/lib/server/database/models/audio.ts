@@ -149,7 +149,7 @@ export default class Audio extends Model {
         return true;
     }
 
-    toClientside(includeUser: boolean = true): ClientsideAudio {
+    toClientside(includeUser: boolean = true, favoriteCount?: number, isFavorited?: boolean): ClientsideAudio {
         return {
             id: this.id,
             title: this.title,
@@ -160,6 +160,8 @@ export default class Audio extends Model {
             url: this.path,
             plays: this.plays,
             playsString: this.playsString,
+            favoriteCount: favoriteCount ?? 0,
+            isFavorited: isFavorited,
             createdAt: this.createdAt.getTime(),
             user: includeUser ? this.user?.toClientside() : undefined,
         };

@@ -25,7 +25,7 @@
 </script>
 <h1>Search results for: {data.query}</h1>
 
-<AudioList audios={data.audios} page={data.page} totalPages={0} paginationBaseUrl={`/search`} />
+<AudioList audios={data.audios} currentUser={data.user} page={data.page} totalPages={0} paginationBaseUrl={`/search`} />
 
 <style>
   h1 {
