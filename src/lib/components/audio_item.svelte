@@ -33,15 +33,15 @@
 
 <article class="audio-item">
     <div class="audio-header">
-        <h3>
+        <h3 aria-describedby="audio-stats-{audio.id}">
             {#if audio.user && !audio.user.isTrusted}
                 <span style="color: red">(Pending review)</span> |{" "}
             {/if}
             <a href={`/listen/${audio.id}`}>{audio.title}</a>
         </h3>
-        <div class="audio-stats">
+        <div class="audio-stats" id="audio-stats-{audio.id}">
             <span class="plays">{audio.playsString}</span>
-            <span class="favorites">{favoritesString}</span>
+            with <span class="favorites">{favoritesString}</span>
         </div>
     </div>
     {#if audio.user}
@@ -51,6 +51,7 @@
     {/if}
     <SafeMarkdown source={audio.description} />
 </article>
+
 <!--
  Copyright 2025 the-byte-bender.
  SPDX-License-Identifier: MPL-2.0
@@ -85,7 +86,8 @@
         flex-shrink: 0;
     }
 
-    .plays, .favorites {
+    .plays,
+    .favorites {
         color: #666;
         font-size: 14px;
         white-space: nowrap;
