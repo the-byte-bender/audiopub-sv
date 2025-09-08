@@ -24,6 +24,7 @@ import {
     AudioFollow,
     Notification,
 } from "$lib/server/database";
+import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
@@ -74,14 +75,50 @@ export const load: PageServerLoad = async (event) => {
         );
     }
 
-    const isFollowing = event.locals.user
-        ? !!(await AudioFollow.findOne({
-              where: { userId: event.locals.user.id, audioId: audio.id } as any,
-          }))
-        : false;
+    // Query 2: Get interaction data (following status, favorite count, user favorite status)
+    let isFollowing = false;
+    let favoriteCount = 0;
+    let isFavorited = false;
+
+    try {
+        const results = await Promise.all([
+            // Check if user is following this audio
+            event.locals.user
+                ? AudioFollow.findOne({
+                      where: { userId: event.locals.user.id, audioId: audio.id } as any,
+                  }).then(result => !!result).catch(err => {
+                      console.error('Error checking follow status:', err);
+                      return false;
+                  })
+                : Promise.resolve(false),
+            // Get favorite count for this audio
+            AudioFavorite.count({
+                where: { audioId: audio.id }
+            }).catch(err => {
+                console.error('Error getting favorite count:', err);
+                return 0;
+            }),
+            // Check if user has favorited this audio
+            event.locals.user
+                ? AudioFavorite.findOne({
+                      where: { userId: event.locals.user.id, audioId: audio.id }
+                  }).then(result => !!result).catch(err => {
+                      console.error('Error checking user favorite:', err);
+                      return false;
+                  })
+                : Promise.resolve(false)
+        ]);
+
+        isFollowing = results[0];
+        favoriteCount = results[1];
+        isFavorited = results[2];
+    } catch (err) {
+        console.error('Error fetching audio interaction data:', err);
+        // Continue with default values
+    }
 
     return {
-        audio: audio.toClientside(),
+        audio: audio.toClientside(true, favoriteCount, isFavorited),
         comments: comments.map((c) => c.toClientside(false)),
         mimeType: audio.mimeType,
         isFollowing,
@@ -188,6 +225,30 @@ export const actions: Actions = {
         await AudioFollow.destroy({
             where: { userId: user.id, audioId: audio.id } as any,
         });
+        return { success: true };
+    },
+    favorite: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isTrusted || user.isBanned)
+            return error(403, "Forbidden");
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) return error(404, "Not found");
+        
+        const favorite = await AudioFavorite.createFavorite(user.id, audio.id);
+        if (!favorite) {
+            // Already favorited, that's fine
+            return { success: true };
+        }
+        return { success: true };
+    },
+    unfavorite: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isTrusted || user.isBanned)
+            return error(403, "Forbidden");
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) return error(404, "Not found");
+        
+        await AudioFavorite.removeFavorite(user.id, audio.id);
         return { success: true };
     },
 };

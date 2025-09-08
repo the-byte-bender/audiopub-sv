@@ -35,6 +35,8 @@ export interface ClientsideAudio {
     url: string;
     plays: number;
     playsString: string;
+    favoriteCount: number;
+    isFavorited?: boolean;
     createdAt: number;
     user?: ClientsideUser;
 }
@@ -52,6 +54,7 @@ export enum NotificationType {
     comment = "comment",
     upload = "upload",
     system = "system",
+    favorite = "favorite",
 }
 
 export enum NotificationTargetType {

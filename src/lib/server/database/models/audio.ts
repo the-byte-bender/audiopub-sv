@@ -37,6 +37,7 @@ import Mime from "mime-types";
 import User, { type UserInfo } from "./user";
 import Comment from "./comment";
 import PlaysTracker from "./plays_tracker";
+import AudioFavorite from "./audio_favorite";
 import type { ClientsideAudio } from "$lib/types";
 
 export interface AudioInfo {
@@ -97,6 +98,9 @@ export default class Audio extends Model {
     @HasMany(() => Comment)
     declare comments?: Comment[];
 
+    @HasMany(() => AudioFavorite)
+    declare audioFavorites?: AudioFavorite[];
+
     get path(): string {
         return `audio/${this.id}`;
     }
@@ -149,7 +153,7 @@ export default class Audio extends Model {
         return true;
     }
 
-    toClientside(includeUser: boolean = true): ClientsideAudio {
+    toClientside(includeUser: boolean = true, favoriteCount?: number, isFavorited?: boolean): ClientsideAudio {
         return {
             id: this.id,
             title: this.title,
@@ -160,6 +164,8 @@ export default class Audio extends Model {
             url: this.path,
             plays: this.plays,
             playsString: this.playsString,
+            favoriteCount: favoriteCount ?? 0,
+            isFavorited: isFavorited,
             createdAt: this.createdAt.getTime(),
             user: includeUser ? this.user?.toClientside() : undefined,
         };

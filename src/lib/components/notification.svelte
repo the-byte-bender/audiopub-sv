@@ -67,6 +67,15 @@
             <span class="comment-date"> - {relativeTime}</span>
         </h3>
         <SafeMarkdown source={comment.content} />
+    {:else if notification.type === NotificationType.favorite && notification.target}
+        {@const audio = notification.target}
+        <h3>
+            <a href={`/user/${notification.actor?.id}`}>
+                {notification.actor?.displayName}
+            </a>
+            favorited <a {href}>{(audio as any).title}</a>
+            <span class="comment-date"> - {relativeTime}</span>
+        </h3>
     {:else if notification.type === NotificationType.system}
         <h3>
             {notification.metadata?.title || "System"}

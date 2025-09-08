@@ -17,8 +17,10 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 import { Audio, User } from "$lib/server/database";
+import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { PageServerLoad } from "./$types";
 import { type OrderItem, Sequelize } from "sequelize";
+
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
@@ -26,7 +28,7 @@ export const load: PageServerLoad = async (event) => {
     const sortField = event.url.searchParams.get("sort") || "createdAt";
     const sortOrder = event.url.searchParams.get("order") || "DESC";
 
-    const validSortFields = ["createdAt", "plays", "title", "random"];
+    const validSortFields = ["createdAt", "plays", "title", "random", "favoriteCount"];
     const validSortOrders = ["ASC", "DESC"];
     const validatedSortField = validSortFields.includes(sortField)
         ? sortField
@@ -56,8 +58,57 @@ export const load: PageServerLoad = async (event) => {
             where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
         },
     });
+
+    // Query 2: Get favorite data efficiently 
+    const audioIds = audios.rows.map(audio => audio.id);
+    const currentUser = event.locals.user;
+    
+    let favoriteCounts = new Map<string, number>();
+    let userFavorites = new Set<string>();
+
+    if (audioIds.length > 0) {
+        try {
+            const [favoriteCountsData, userFavoritesData] = await Promise.all([
+                // Get favorite counts for all audios in one query
+                AudioFavorite.findAll({
+                    where: { audioId: audioIds },
+                    attributes: [
+                        'audioId',
+                        [Sequelize.fn('COUNT', Sequelize.col('id')), 'count']
+                    ],
+                    group: ['audioId']
+                }),
+                // Get current user's favorites in one query
+                currentUser ? AudioFavorite.findAll({
+                    where: { 
+                        userId: currentUser.id,
+                        audioId: audioIds 
+                    },
+                    attributes: ['audioId']
+                }) : Promise.resolve([])
+            ]);
+
+            // Process results into maps for easy lookup
+            favoriteCounts = new Map(
+                favoriteCountsData.map(item => [
+                    item.audioId, 
+                    parseInt((item as any).get('count')) || 0
+                ])
+            );
+            userFavorites = new Set(userFavoritesData.map(item => item.audioId));
+            
+        } catch (err) {
+            console.error('Error fetching favorite data:', err);
+            // Continue with empty data
+        }
+    }
+
     return {
-        audios: audios.rows.map((audio) => audio.toClientside()),
+        audios: audios.rows.map((audio) => {
+            const favoriteCount = favoriteCounts.get(audio.id) || 0;
+            const isFavorited = userFavorites.has(audio.id);
+            return audio.toClientside(true, favoriteCount, isFavorited);
+        }),
         count: audios.count,
         page,
         limit,
