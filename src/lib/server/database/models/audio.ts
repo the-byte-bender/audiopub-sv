@@ -37,6 +37,7 @@ import Mime from "mime-types";
 import User, { type UserInfo } from "./user";
 import Comment from "./comment";
 import PlaysTracker from "./plays_tracker";
+import AudioFavorite from "./audio_favorite";
 import type { ClientsideAudio } from "$lib/types";
 
 export interface AudioInfo {
@@ -96,6 +97,9 @@ export default class Audio extends Model {
 
     @HasMany(() => Comment)
     declare comments?: Comment[];
+
+    @HasMany(() => AudioFavorite)
+    declare audioFavorites?: AudioFavorite[];
 
     get path(): string {
         return `audio/${this.id}`;

@@ -34,6 +34,9 @@
             case "plays":
                 fieldDesc = "play count";
                 break;
+            case "favoriteCount":
+                fieldDesc = "favorite count";
+                break;
             case "title":
                 fieldDesc = "title";
                 break;
@@ -63,6 +66,9 @@
         >
         <option value="plays" selected={data.sortField === "plays"}
             >Play Count</option
+        >
+        <option value="favoriteCount" selected={data.sortField === "favoriteCount"}
+            >Favorite Count</option
         >
         <option value="title" selected={data.sortField === "title"}
             >Title</option

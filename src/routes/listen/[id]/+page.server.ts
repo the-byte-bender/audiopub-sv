@@ -75,13 +75,14 @@ export const load: PageServerLoad = async (event) => {
         );
     }
 
-    // Get following status and favorite data with error handling
+    // Query 2: Get interaction data (following status, favorite count, user favorite status)
     let isFollowing = false;
     let favoriteCount = 0;
     let isFavorited = false;
 
     try {
         const results = await Promise.all([
+            // Check if user is following this audio
             event.locals.user
                 ? AudioFollow.findOne({
                       where: { userId: event.locals.user.id, audioId: audio.id } as any,
@@ -90,12 +91,18 @@ export const load: PageServerLoad = async (event) => {
                       return false;
                   })
                 : Promise.resolve(false),
-            AudioFavorite.getFavoriteCount(audio.id).catch(err => {
+            // Get favorite count for this audio
+            AudioFavorite.count({
+                where: { audioId: audio.id }
+            }).catch(err => {
                 console.error('Error getting favorite count:', err);
                 return 0;
             }),
+            // Check if user has favorited this audio
             event.locals.user
-                ? AudioFavorite.isUserFavorite(event.locals.user.id, audio.id).catch(err => {
+                ? AudioFavorite.findOne({
+                      where: { userId: event.locals.user.id, audioId: audio.id }
+                  }).then(result => !!result).catch(err => {
                       console.error('Error checking user favorite:', err);
                       return false;
                   })
@@ -222,7 +229,7 @@ export const actions: Actions = {
     },
     favorite: async (event) => {
         const user = event.locals.user;
-        if (!user || !user.isVerified || user.isBanned)
+        if (!user || !user.isTrusted || user.isBanned)
             return error(403, "Forbidden");
         const audio = await Audio.findByPk(event.params.id);
         if (!audio) return error(404, "Not found");
@@ -236,7 +243,7 @@ export const actions: Actions = {
     },
     unfavorite: async (event) => {
         const user = event.locals.user;
-        if (!user || !user.isVerified || user.isBanned)
+        if (!user || !user.isTrusted || user.isBanned)
             return error(403, "Forbidden");
         const audio = await Audio.findByPk(event.params.id);
         if (!audio) return error(404, "Not found");
