@@ -1,7 +1,7 @@
 <!--
   This file is part of the audiopub project.
   
-  Copyright (C) 2024 the-byte-bender
+  Copyright (C) 2025 the-byte-bender
   
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU Affero General Public License as published by
@@ -20,6 +20,7 @@
     import { enhance } from "$app/forms";
     import type { PageData } from "./$types";
     import type { ActionData } from "./$types";
+    import AudioList from "$lib/components/audio_list.svelte";
     import title from "$lib/title";
     import { onMount } from "svelte";
     onMount(() => title.set("Your profile"));
@@ -58,6 +59,16 @@
     />
     <button type="submit">Update</button>
 </form>
+
+<h2>Your Uploads</h2>
+
+<AudioList
+    audios={data.audios}
+    groupThreshold={0}
+    page={data.page}
+    totalPages={data.totalPages}
+    paginationBaseUrl={`/profile`}
+/>
 
 <style>
     .error-message {

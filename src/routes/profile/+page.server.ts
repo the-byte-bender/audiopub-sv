@@ -1,7 +1,7 @@
 /*
  * This file is part of the audiopub project.
  * 
- * Copyright (C) 2024 the-byte-bender
+ * Copyright (C) 2025 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -18,7 +18,7 @@
  */
 import { fail, redirect, type Actions } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
-import { User } from "$lib/server/database";
+import { User, Audio } from "$lib/server/database";
 import { hash } from "bcrypt";
 
 export const load: PageServerLoad = async (event) => {
@@ -26,10 +26,29 @@ export const load: PageServerLoad = async (event) => {
   if (!user) {
     return redirect(303, "/login");
   }
+
+  const pageString = event.url.searchParams.get("page");
+  const page = pageString ? parseInt(pageString, 10) : 1;
+  const limit = 30;
+  const offset = (page - 1) * limit;
+
+  const audios = await Audio.findAndCountAll({
+    where: { userId: user.id },
+    limit,
+    offset,
+    order: [["createdAt", "DESC"]],
+  });
+
   return {
     name: user.name,
     email: user.email,
     displayName: user.displayName,
+    audios: audios.rows.map((audio) => audio.toClientside()),
+    count: audios.count,
+    page,
+    limit,
+    totalPages: Math.ceil(audios.count / limit),
+    profileUser: user.toClientside(),
   };
 };
 
