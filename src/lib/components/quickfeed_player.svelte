@@ -27,8 +27,8 @@
     export let currentUser: ClientsideUser | null = null;
 
     let currentIndex = 0;
-    let audioElement: HTMLAudioElement | null = null;
     let isPlaying = false;
+    let isTransitioning = false;
     let currentTime = 0;
     let duration = 0;
     let scrollContainer: HTMLElement;
@@ -39,6 +39,40 @@
     // Play tracking variables
     let playStartTime = 0;
     let hasRegisteredPlay = false;
+    
+    // Pagination variables
+    let isLoadingMore = false;
+    let currentPage = 1;
+    let hasMoreContent = true;
+    
+    // Debug flag (can be toggled in console: window.debugQuickfeed = true)
+    let showDebugInfo = false;
+    
+    // Dynamic ring buffer audio system
+    let audioContext: AudioContext | null = null;
+    
+    // Dynamic pool configuration
+    const MIN_POOL_SIZE = 2;
+    const MAX_POOL_SIZE = 10;
+    const INITIAL_POOL_SIZE = 3;
+    
+    let audioPool: Array<{
+        element: HTMLAudioElement;
+        gainNode: GainNode | null;
+        filterNode: BiquadFilterNode | null;
+        source: MediaElementAudioSourceNode | null;
+        isActive: boolean;
+        trackId: string | null;
+        fadeStartTime: number;
+        fadeType: 'in' | 'out' | null;
+        lastUsedTime: number;
+    }> = [];
+    let currentAudioIndex = 0;
+    let activeTransitions = new Map<number, { startTime: number; duration: number }>();
+    
+    // Rapid navigation tracking
+    let navigationHistory: number[] = [];
+    let lastNavigationTime = 0;
     
     // Touch gesture support
     let touchStartY = 0;
@@ -52,21 +86,565 @@
     // Track if audio listeners have been set up
     let audioListenersSetup = false;
     
-    // Create audio element using new Audio() constructor
-    function getAudioElement(): HTMLAudioElement {
-        if (!audioElement && browser) {
-            console.log('🆕 Creating new Audio() element');
-            audioElement = new Audio();
-            audioElement.preload = 'metadata';
+
+    function initializeAudioPool() {
+        if (!browser || audioPool.length > 0) return;
+        
+        console.log('🔄 Initializing dynamic audio pool with', INITIAL_POOL_SIZE, 'elements');
+        
+        for (let i = 0; i < INITIAL_POOL_SIZE; i++) {
+            addSlotToPool();
+        }
+    }
+    
+    function addSlotToPool(): number {
+        if (audioPool.length >= MAX_POOL_SIZE) {
+            console.log('⚠️ Pool at maximum size, cannot add more slots');
+            return -1;
+        }
+        
+        const slotIndex = audioPool.length;
+        const element = new Audio();
+        element.preload = 'metadata';
+        element.crossOrigin = 'anonymous'; // For Web Audio API
+        
+        const slot = {
+            element,
+            gainNode: null,
+            filterNode: null,
+            source: null,
+            isActive: false,
+            trackId: null,
+            fadeStartTime: 0,
+            fadeType: null,
+            lastUsedTime: Date.now()
+        };
+        
+        // Add essential event listeners to each slot
+        setupSlotEventListeners(slot, slotIndex);
+        
+        audioPool.push(slot);
+        
+        return slotIndex;
+    }
+
+    function setupSlotEventListeners(slot: typeof audioPool[0], slotIndex: number) {
+        const element = slot.element;
+        
+        element.addEventListener('play', () => {
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                isPlaying = true;
+                isBuffering = false;
+                startPlayTracking();
+            }
+        });
+        
+        element.addEventListener('pause', () => {
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                isPlaying = false;
+                stopPlayTracking();
+            }
+        });
+        
+        element.addEventListener('timeupdate', () => {
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                const newCurrentTime = element.currentTime;
+                const newDuration = element.duration;
+                if (currentTime !== newCurrentTime || duration !== newDuration) {
+                    currentTime = newCurrentTime;
+                    duration = newDuration;
+                }
+                
+                // Check if we should register a play
+                if (playStartTime > 0 && !hasRegisteredPlay) {
+                    tryRegisterPlay();
+                }
+            }
+        });
+        
+        element.addEventListener('loadedmetadata', () => {
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                duration = element.duration || 0;
+                currentTime = 0;
+            }
+        });
+        
+        element.addEventListener('waiting', () => {
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                isBuffering = true;
+            }
+        });
+        
+        element.addEventListener('canplay', () => {
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                isBuffering = false;
+            }
+        });
+        
+        element.addEventListener('error', (e) => {
+            console.error(`❌ Slot ${slotIndex} error:`, e);
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                isBuffering = false;
+            }
+        });
+        
+        element.addEventListener('ended', () => {
+            if (slot.isActive && slotIndex === currentAudioIndex) {
+                isPlaying = false;
+                stopPlayTracking();
+            }
+        });
+        
+    }
+
+    function createAudioNodes(audioSlot: typeof audioPool[0]): boolean {
+        if (!audioContext || audioSlot.source) return true; // Already has nodes
+
+        try {
+            const source = audioContext.createMediaElementSource(audioSlot.element);
+            const gainNode = audioContext.createGain();
+            const filterNode = audioContext.createBiquadFilter();
+
+            // Set up filter defaults
+            filterNode.type = 'lowpass';
+            filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+            filterNode.Q.setValueAtTime(1, audioContext.currentTime);
+
+            // Connect the audio graph: source -> filter -> gain -> destination
+            source.connect(filterNode);
+            filterNode.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Store references
+            audioSlot.source = source;
+            audioSlot.gainNode = gainNode;
+            audioSlot.filterNode = filterNode;
+
+            return true;
+        } catch (error) {
+            console.error('❌ Failed to create audio nodes:', error);
+            return false;
+        }
+    }
+
+    function cleanupAudioSlot(slot: typeof audioPool[0], slotIndex: number) {
+        
+        // Stop audio playback
+        if (!slot.element.paused) {
+            slot.element.pause();
+        }
+        slot.element.currentTime = 0;
+        
+        // Reset Web Audio nodes to default state
+        if (slot.gainNode && audioContext) {
+            slot.gainNode.gain.cancelScheduledValues(audioContext.currentTime);
+            slot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+        }
+        if (slot.filterNode && audioContext) {
+            slot.filterNode.frequency.cancelScheduledValues(audioContext.currentTime);
+            slot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+            slot.filterNode.type = 'lowpass';
+        }
+        
+        // Reset slot state
+        slot.isActive = false;
+        slot.trackId = null;
+        slot.fadeType = null;
+        slot.fadeStartTime = 0;
+        
+    }
+    
+    function detectRapidNavigation(): boolean {
+        const now = Date.now();
+        const timeSinceLastNav = now - lastNavigationTime;
+        
+        // Add current navigation to history
+        navigationHistory.push(now);
+        lastNavigationTime = now;
+        
+        // Keep only recent navigations (last 2 seconds)
+        navigationHistory = navigationHistory.filter(time => now - time < 2000);
+        
+        // Rapid navigation = more than 3 navigations in 1 second
+        const recentNavs = navigationHistory.filter(time => now - time < 1000);
+        const isRapid = recentNavs.length > 3;
+        
+        return isRapid;
+    }
+    
+    function expandPoolIfNeeded(): boolean {
+        const activeSlots = audioPool.filter(slot => slot.isActive || slot.fadeType !== null).length;
+        const availableSlots = audioPool.length - activeSlots;
+        
+        // Need more slots if we have less than 2 available
+        if (availableSlots < 2 && audioPool.length < MAX_POOL_SIZE) {
+            const newSlotIndex = addSlotToPool();
+            return newSlotIndex !== -1;
+        }
+        
+        return false;
+    }
+    
+    function contractPoolIfNeeded() {
+        // Only contract if we have more than minimum and plenty of idle slots
+        if (audioPool.length <= MIN_POOL_SIZE) return;
+        
+        const now = Date.now();
+        const activeSlots = audioPool.filter(slot => slot.isActive || slot.fadeType !== null).length;
+        const idleTime = 5000; // 5 seconds of inactivity
+        
+        // Check if we can safely remove unused slots
+        for (let i = audioPool.length - 1; i >= MIN_POOL_SIZE; i--) {
+            const slot = audioPool[i];
             
-            // Set up event listeners immediately
-            if (!audioListenersSetup) {
-                setupAudioListeners();
-                audioListenersSetup = true;
+            // Can remove if slot is completely idle for a while
+            if (!slot.isActive && 
+                slot.fadeType === null && 
+                (now - slot.lastUsedTime) > idleTime &&
+                activeSlots < audioPool.length - 1) {
+                
+                
+                // Clean up the slot completely
+                cleanupAudioSlot(slot, i);
+                
+                // Remove from pool
+                audioPool.splice(i, 1);
+
+                
+                return; // Only remove one at a time
+            }
+        }
+    }
+
+    function findAvailableAudioSlot(): number {
+        // First try to find a completely inactive slot
+        for (let i = 0; i < audioPool.length; i++) {
+            const slot = audioPool[i];
+            if (!slot.isActive && slot.fadeType === null) {
+                slot.lastUsedTime = Date.now();
+                return i;
             }
         }
         
-        return audioElement!;
+        // If no clean slots available, try to expand the pool
+        const expandedSlot = expandPoolIfNeeded();
+        if (expandedSlot) {
+            // Return the newly created slot
+            const newSlotIndex = audioPool.length - 1;
+            audioPool[newSlotIndex].lastUsedTime = Date.now();
+            return newSlotIndex;
+        }
+        
+        // If we can't expand, look for slots that are only fading out (safe to reuse)
+        let oldestFadeOut = -1;
+        let oldestTime = Infinity;
+        
+        for (let i = 0; i < audioPool.length; i++) {
+            const slot = audioPool[i];
+            // Only reuse if it's fading out AND not actively playing new content
+            if (slot.fadeType === 'out' && !slot.isActive && slot.fadeStartTime < oldestTime) {
+                oldestTime = slot.fadeStartTime;
+                oldestFadeOut = i;
+            }
+        }
+        
+        if (oldestFadeOut !== -1) {
+            audioPool[oldestFadeOut].lastUsedTime = Date.now();
+            return oldestFadeOut;
+        }
+        
+        // Emergency fallback: find least recently used inactive slot
+        let lruSlot = -1;
+        let oldestUseTime = Infinity;
+        
+        for (let i = 0; i < audioPool.length; i++) {
+            const slot = audioPool[i];
+            if (!slot.isActive && slot.lastUsedTime < oldestUseTime) {
+                oldestUseTime = slot.lastUsedTime;
+                lruSlot = i;
+            }
+        }
+        
+        if (lruSlot !== -1) {
+            audioPool[lruSlot].lastUsedTime = Date.now();
+            return lruSlot;
+        }
+        
+        // Absolute last resort: use first slot (shouldn't happen with dynamic pool)
+        return 0;
+    }
+
+    function findAvailableAudioSlotExcluding(excludeIndex: number): number {
+        // First try to find an inactive slot (excluding the specified index)
+        for (let i = 0; i < audioPool.length; i++) {
+            if (i !== excludeIndex && !audioPool[i].isActive) {
+                return i;
+            }
+        }
+        
+        // If all slots are active, find the oldest one that's fading out (excluding the specified index)
+        let oldestFadeOut = -1;
+        let oldestTime = Infinity;
+        
+        for (let i = 0; i < audioPool.length; i++) {
+            const slot = audioPool[i];
+            if (i !== excludeIndex && slot.fadeType === 'out' && slot.fadeStartTime < oldestTime) {
+                oldestTime = slot.fadeStartTime;
+                oldestFadeOut = i;
+            }
+        }
+        
+        if (oldestFadeOut !== -1) {
+            return oldestFadeOut;
+        }
+        
+        // Last resort: use next available slot (avoiding the excluded one)
+        let nextIndex = (excludeIndex + 1) % audioPool.length;
+        return nextIndex;
+    }
+
+    function getCurrentAudioElement(): HTMLAudioElement | null {
+        if (audioPool.length === 0) return null;
+        
+        // Find the active audio that's not fading out
+        for (const slot of audioPool) {
+            if (slot.isActive && slot.fadeType !== 'out') {
+                return slot.element;
+            }
+        }
+        
+        // Fallback to the current index
+        return audioPool[currentAudioIndex]?.element || null;
+    }
+    
+    function getAudioElement(): HTMLAudioElement {
+        // Legacy compatibility - returns current playing audio
+        const currentElement = getCurrentAudioElement();
+        if (currentElement) return currentElement;
+        
+        // Fallback: initialize pool and return first element
+        if (audioPool.length === 0) {
+            initializeAudioPool();
+        }
+        
+        return audioPool[0].element;
+    }
+
+    async function ensureAudioContext(): Promise<boolean> {
+        if (!browser) return false;
+        
+        if (!audioContext) {
+            try {
+                audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            } catch (error) {
+                console.error('❌ Failed to create audio context:', error);
+                return false;
+            }
+        }
+
+        // Resume context if suspended
+        if (audioContext.state === 'suspended') {
+            try {
+                await audioContext.resume();
+            } catch (error) {
+                return false;
+            }
+        }
+
+        return audioContext.state === 'running';
+    }
+
+
+    async function ringBufferCrossfade(audioSrc: string, trackId: string, transitionDuration = 600): Promise<boolean> {
+        
+        try {
+            // Step 1: Ensure audio context and pool are ready
+            const contextReady = await ensureAudioContext();
+            if (!contextReady) {
+                return false;
+            }
+            
+            if (audioPool.length === 0) {
+                initializeAudioPool();
+            }
+
+            // Step 2: Find currently playing audio to fade out (before we allocate new slot)
+            const currentSlots = audioPool.filter(slot => slot.isActive && slot.fadeType !== 'out');
+            
+            // Step 3: Find slot for new audio
+            const newSlotIndex = findAvailableAudioSlot();
+            const newSlot = audioPool[newSlotIndex];
+            
+            // Clean up the slot if it was previously used
+            if (newSlot.isActive) {
+                cleanupAudioSlot(newSlot, newSlotIndex);
+            }
+            
+            // Step 4: Set up Web Audio nodes for the new slot
+            const nodesReady = createAudioNodes(newSlot);
+            if (!nodesReady || !newSlot.gainNode || !newSlot.filterNode) {
+                return false;
+            }
+            
+            // Step 4.5: Validate current slots have Web Audio nodes for crossfading
+            let validCurrentSlots = [];
+            for (const slot of currentSlots) {
+                if (!slot.gainNode || !slot.filterNode) {
+                    const currentNodesReady = createAudioNodes(slot);
+                    if (currentNodesReady && slot.gainNode && slot.filterNode) {
+                        validCurrentSlots.push(slot);
+                    } else {
+                        console.log('❌ Failed to create Web Audio nodes for current slot, will skip crossfade');
+                    }
+                } else {
+                    validCurrentSlots.push(slot);
+                }
+            }
+            
+            
+            // If no current slots exist or have valid nodes, this is effectively a "first play"
+            if (validCurrentSlots.length === 0) {
+                console.log('🎵 No current audio to crossfade from - direct play new audio');
+            }
+
+            // Step 5: Load new audio
+            newSlot.element.src = audioSrc;
+            newSlot.trackId = trackId;
+            
+            await new Promise<void>((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('Load timeout')), 5000);
+                
+                const onCanPlay = () => {
+                    clearTimeout(timeout);
+                    newSlot.element.removeEventListener('canplay', onCanPlay);
+                    newSlot.element.removeEventListener('error', onError);
+                    resolve();
+                };
+                
+                const onError = () => {
+                    clearTimeout(timeout);
+                    newSlot.element.removeEventListener('canplay', onCanPlay);
+                    newSlot.element.removeEventListener('error', onError);
+                    reject(new Error('Load error'));
+                };
+                
+                newSlot.element.addEventListener('canplay', onCanPlay);
+                newSlot.element.addEventListener('error', onError);
+                newSlot.element.load();
+            });
+
+            // Step 6: Start crossfade (new audio loaded successfully)
+            const startTime = audioContext.currentTime;
+            const endTime = startTime + (transitionDuration / 1000);
+            
+            // Fade out all currently playing audio (use validated slots only)
+            for (const slot of validCurrentSlots) {
+                // if (slot === newSlot) continue;
+                if (slot.gainNode && slot.filterNode) {
+                    console.log('🔽 Fading out slot with track:', slot.trackId);
+                    
+                    slot.fadeType = 'out';
+                    slot.fadeStartTime = startTime;
+                    
+                    // Fade out volume and apply lowpass
+                    slot.gainNode.gain.cancelScheduledValues(startTime);
+                    slot.gainNode.gain.setValueAtTime(1, startTime);
+                    slot.gainNode.gain.linearRampToValueAtTime(0, endTime);
+                    
+                    slot.filterNode.frequency.cancelScheduledValues(startTime);
+                    slot.filterNode.frequency.setValueAtTime(20000, startTime);
+                    slot.filterNode.frequency.exponentialRampToValueAtTime(300, endTime);
+                    
+                    // Schedule event-based cleanup after fade completes
+                    const cleanupFadedSlot = () => {
+                        console.log('🧹 Event-based cleanup of faded out slot');
+                        slot.element.pause();
+                        slot.element.currentTime = 0;
+                        slot.isActive = false;
+                        slot.fadeType = null;
+                        slot.trackId = null;
+                        slot.lastUsedTime = Date.now();
+                    };
+                    
+                    // Use Web Audio event timing for precise cleanup
+                    if (audioContext) {
+                        const cleanupTime = audioContext.currentTime + (transitionDuration / 1000) + 0.1;
+                        
+                        // Create a gain node just for timing
+                        const timingGain = audioContext.createGain();
+                        timingGain.connect(audioContext.destination);
+                        timingGain.gain.setValueAtTime(0, cleanupTime - 0.01);
+                        timingGain.gain.setValueAtTime(1, cleanupTime);
+                        
+                        // Listen for the timing event
+                        const checkCleanup = () => {
+                            if (audioContext!.currentTime >= cleanupTime) {
+                                cleanupFadedSlot();
+                                timingGain.disconnect();
+                                return;
+                            }
+                            requestAnimationFrame(checkCleanup);
+                        };
+                        requestAnimationFrame(checkCleanup);
+                    } else {
+                        // Fallback to timer if no audioContext
+                        setTimeout(cleanupFadedSlot, transitionDuration + 100);
+                    }
+                }
+            }
+            
+            // Step 6: Fade in new audio
+            newSlot.isActive = true;
+            newSlot.fadeStartTime = startTime;
+            
+            if (validCurrentSlots.length > 0) {
+                // Crossfade mode: fade in with highpass filter
+                newSlot.fadeType = 'in';
+                
+                // Set up highpass filter for fade in (start heavily filtered, become clear)
+                newSlot.filterNode.type = 'highpass';
+                newSlot.filterNode.frequency.cancelScheduledValues(startTime);
+                newSlot.filterNode.frequency.setValueAtTime(20000, startTime); // Start very filtered (thin sound)
+                newSlot.filterNode.frequency.exponentialRampToValueAtTime(20, endTime); // End minimal filter (full sound)
+                
+                newSlot.gainNode.gain.cancelScheduledValues(startTime);
+                newSlot.gainNode.gain.setValueAtTime(0, startTime);
+                newSlot.gainNode.gain.linearRampToValueAtTime(1, endTime);
+            } else {
+                // Direct play mode: no current audio to crossfade from
+                newSlot.fadeType = null;
+                
+                // Set up for direct play (no filter effects)
+                newSlot.filterNode.type = 'lowpass';
+                newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+                newSlot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+            }
+            
+            // Step 7: Start playback
+            if (isPlaying) {
+                await newSlot.element.play();
+            }
+            
+            // Update current audio index
+            currentAudioIndex = newSlotIndex;
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ Ring buffer crossfade failed:', error);
+            
+            // IMPORTANT: Even if crossfade fails, we must stop the current audio
+            // to prevent audio overlap in the fallback loading
+            
+            const failureCurrentSlots = audioPool.filter(slot => slot.isActive && slot.fadeType !== 'out');
+            for (const slot of failureCurrentSlots) {
+                const slotIndex = audioPool.indexOf(slot);
+                console.log(`🛑 Force-stopping slot ${slotIndex} due to crossfade failure`);
+                cleanupAudioSlot(slot, slotIndex);
+            }
+            
+            return false;
+        }
     }
 
     $: currentAudio = audios[currentIndex];
@@ -79,48 +657,118 @@
 
     // Reactive statement to load audio when current index changes
     $: if (audios[currentIndex] && browser) {
-        console.log('🔄 Current audio index changed to:', currentIndex, '-', audios[currentIndex].title);
-        console.log('  - Preserving isPlaying state:', isPlaying);
+
+        // Detect rapid navigation and manage pool accordingly
+        const isRapid = detectRapidNavigation();
+        if (isRapid) {
+            expandPoolIfNeeded();
+        }
+        
         // Reset audio metrics but preserve playback state
         currentTime = 0;
         duration = 0;
         isBuffering = false;
         resetPlayTracking();
-        loadAudio();
+        loadAudio(true); // Use crossfade for audio changes
+        
+        // Schedule pool cleanup for later (when things calm down)
+        setTimeout(() => contractPoolIfNeeded(), 3000);
     }
 
-    function loadAudio() {
+    async function loadAudio(useCrossfade = false) {
         if (!currentAudio || !browser) return;
         
-        console.log('📻 Loading audio:', currentAudio.title);
-        console.log('Transcoded path:', currentAudio.transcodedPath);
-        console.log('Original path:', currentAudio.path);
-        
-        const audio = getAudioElement();
-        
-        // Stop current playback if any
-        if (!audio.paused) {
-            console.log('⏹️ Stopping current playback');
-            audio.pause();
+        // Guard against interfering with active crossfades
+        if (isTransitioning) {
+            console.log('Load audio skipped - transition in progress');
+            return;
         }
         
-        // Reset audio element
-        audio.currentTime = 0;
+
+
+        // Determine the audio source to use
+        const audioSrc = currentAudio.transcodedPath ? 
+            `/${currentAudio.transcodedPath}` : 
+            `/${currentAudio.path}`;
+
+        // Try ring buffer crossfade first
+        if (useCrossfade && isPlaying) {
+            
+            isTransitioning = true;
+            const crossfadeSuccess = await ringBufferCrossfade(audioSrc, currentAudio.id, 200);
+            isTransitioning = false;
+            
+            if (crossfadeSuccess) {
+                isBuffering = false;
+                return; // Crossfade handled everything
+            }
+        } else if (useCrossfade) {
+            console.log('⚠️ Crossfade skipped - not currently playing');
+        }
+
+        // Fallback to normal loading using ring buffer
+        console.log('📻 Using fallback loading');
+        
+        if (audioPool.length === 0) {
+            initializeAudioPool();
+        }
+        
+        // Store the currently playing slot to avoid reusing it immediately
+        const currentlyPlayingSlot = audioPool.findIndex(slot => 
+            slot.isActive && slot.fadeType !== 'out' && !slot.element.paused
+        );
+        
+        
+        // Deactivate all other slots (but keep the currently playing one for now)
+        audioPool.forEach((slot, index) => {
+            if (slot.isActive && index !== currentlyPlayingSlot) {
+                cleanupAudioSlot(slot, index);
+            }
+        });
+        
+        // Find a different slot for new audio (avoid the currently playing slot)
+        const slotIndex = findAvailableAudioSlotExcluding(currentlyPlayingSlot);
+        const slot = audioPool[slotIndex];
+        
+        // If we found a different slot, clean up the currently playing one
+        if (currentlyPlayingSlot >= 0 && currentlyPlayingSlot !== slotIndex) {
+            const oldSlot = audioPool[currentlyPlayingSlot];
+            cleanupAudioSlot(oldSlot, currentlyPlayingSlot);
+        }
+    
+        
+        // Prepare the slot (but don't mark as active until loading succeeds)
+        slot.trackId = currentAudio.id;
+        slot.fadeType = null;
+        slot.element.src = audioSrc;
+        
+        // Set up Web Audio nodes if needed
+        if (!slot.source && audioContext) {
+            await ensureAudioContext();
+            createAudioNodes(slot);
+        }
+        
+        // Set gain to full for immediate playback
+        if (slot.gainNode && audioContext) {
+            slot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+            if (slot.filterNode) {
+                slot.filterNode.type = 'lowpass';
+                slot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+            }
+        }
+        
+        // Don't set currentAudioIndex until audio loads successfully
         isBuffering = true;
         
-        // Try transcoded first, with fallback to original
-        tryLoadAudioWithFallback(audio);
         
-        // Register play count when starting to play
-        fetch(`/listen/${currentAudio.id}/try_register_play`, { method: "POST" })
-            .catch(err => console.error('Failed to register play:', err));
+        // Load the audio with fallback, activate slot on success
+        tryLoadAudioWithFallbackAndActivate(slot.element, slot, slotIndex);
     }
     
     function tryLoadAudioWithFallback(audio: HTMLAudioElement) {
         // Prioritize transcoded path for bandwidth optimization
         if (currentAudio.transcodedPath) {
             const transcodedSrc = `/${currentAudio.transcodedPath}`;
-            console.log('🎯 Trying transcoded audio:', transcodedSrc);
             
             // Set up one-time error handler for fallback
             const handleTranscodedError = () => {
@@ -148,6 +796,98 @@
         console.log('📻 Audio load() called, src:', audio.src);
     }
 
+    function tryLoadAudioWithFallbackAndActivate(audio: HTMLAudioElement, slot: typeof audioPool[0], slotIndex: number) {
+        let loadAttempted = false;
+        
+        const activateSlotOnSuccess = async () => {
+            slot.isActive = true;
+            currentAudioIndex = slotIndex;
+            isBuffering = false;
+            
+            // Ensure Web Audio nodes are created for crossfade capability
+            if (!slot.source && audioContext) {
+                await ensureAudioContext();
+                const nodesCreated = createAudioNodes(slot);
+                if (nodesCreated) {
+                    console.log(`✅ Web Audio nodes created for slot ${slotIndex}`);
+                } else {
+                    console.log(`⚠️ Failed to create Web Audio nodes for slot ${slotIndex}`);
+                }
+            }
+            
+            // Remove the success listener since we only want it to fire once
+            audio.removeEventListener('canplay', activateSlotOnSuccess);
+            audio.removeEventListener('loadedmetadata', activateSlotOnSuccess);
+        };
+        
+        const handleLoadFailure = (errorMsg: string) => {
+            console.error(`❌ Failed to load audio in slot ${slotIndex}:`, errorMsg);
+            
+            // Clean up the failed slot
+            cleanupAudioSlot(slot, slotIndex);
+            isBuffering = false;
+            
+            // Remove all listeners
+            audio.removeEventListener('canplay', activateSlotOnSuccess);
+            audio.removeEventListener('loadedmetadata', activateSlotOnSuccess);
+        };
+        
+        // Listen for successful load
+        audio.addEventListener('canplay', activateSlotOnSuccess, { once: true });
+        audio.addEventListener('loadedmetadata', activateSlotOnSuccess, { once: true });
+        
+        // Prioritize transcoded path for bandwidth optimization
+        if (currentAudio.transcodedPath) {
+            const transcodedSrc = `/${currentAudio.transcodedPath}`;
+            
+            // Set up one-time error handler for fallback
+            const handleTranscodedError = () => {
+                console.log('❌ Transcoded audio failed, falling back to original');
+                audio.removeEventListener('error', handleTranscodedError);
+                
+                if (!loadAttempted) {
+                    loadAttempted = true;
+                    // Try original audio as fallback
+                    const originalSrc = `/${currentAudio.path}`;
+                    console.log('🔄 Trying original audio:', originalSrc);
+                    
+                    // Set up error handler for original audio failure
+                    const handleOriginalError = () => {
+                        console.log('❌ Original audio also failed');
+                        audio.removeEventListener('error', handleOriginalError);
+                        handleLoadFailure('Both transcoded and original audio failed');
+                    };
+                    
+                    audio.addEventListener('error', handleOriginalError, { once: true });
+                    audio.src = originalSrc;
+                    audio.load();
+                } else {
+                    handleLoadFailure('Multiple load failures');
+                }
+            };
+            
+            audio.addEventListener('error', handleTranscodedError, { once: true });
+            audio.src = transcodedSrc;
+            audio.load();
+        } else {
+            // No transcoded version, use original directly
+            const originalSrc = `/${currentAudio.path}`;
+            console.log('⚠️ Using original audio (no transcoded):', originalSrc);
+            
+            const handleOriginalError = () => {
+                console.log('❌ Original audio failed to load');
+                audio.removeEventListener('error', handleOriginalError);
+                handleLoadFailure('Original audio failed to load');
+            };
+            
+            audio.addEventListener('error', handleOriginalError, { once: true });
+            audio.src = originalSrc;
+            audio.load();
+        }
+        
+        console.log('📻 Audio load() called, src:', audio.src);
+    }
+
     function openCommentsDialog(index: number) {
         currentIndex = index;
         if (commentsDialog && browser) {
@@ -164,18 +904,15 @@
     function startPlayTracking() {
         playStartTime = Date.now();
         hasRegisteredPlay = false;
-        console.log('▶️ Started play tracking for:', currentAudio?.title);
     }
 
     function stopPlayTracking() {
         playStartTime = 0;
-        console.log('⏹️ Stopped play tracking');
     }
 
     function resetPlayTracking() {
         stopPlayTracking();
         hasRegisteredPlay = false;
-        console.log('🔄 Reset play tracking');
     }
 
     async function tryRegisterPlay() {
@@ -184,14 +921,12 @@
         const playTime = Date.now() - playStartTime;
         if (playTime >= 10000) { // 10 seconds
             hasRegisteredPlay = true;
-            console.log('📊 Registering play for:', currentAudio.title);
             
             try {
                 const response = await fetch(`/listen/${currentAudio.id}/try_register_play`, {
                     method: 'POST'
                 });
                 if (response.ok) {
-                    console.log('✅ Play registered successfully');
                 } else {
                     console.warn('⚠️ Failed to register play');
                 }
@@ -201,29 +936,29 @@
         }
     }
 
-    function togglePlay() {
-        console.log('🎵 TOGGLE PLAY CALLED!');
-        console.log('  - browser:', browser);
-        console.log('  - isPlaying (component state):', isPlaying);
-        console.log('  - currentAudio:', currentAudio?.title);
-        
+    async function togglePlay() {
+
         if (!browser) {
             console.error('❌ Toggle play blocked - browser:', browser);
             return;
         }
         
         const audio = getAudioElement();
-        console.log('✅ Toggle play proceeding with audio element:', audio);
-        console.log('  - audio.src:', audio.src);
-        console.log('  - audio.paused (actual state):', audio.paused);
-        console.log('  - audio.readyState:', audio.readyState);
+
+        // Ensure audio pool and Web Audio context are ready
+        if (audio.paused && audioPool.length === 0) {
+            initializeAudioPool();
+            const contextReady = await ensureAudioContext();
+            if (!contextReady) {
+                console.error('❌ Failed to initialize audio context');
+                return;
+            }
+        }
         
         // Use actual audio state instead of component state for more reliability
         if (!audio.paused) {
-            console.log('⏸️ Pausing audio (audio was playing)');
             audio.pause();
         } else {
-            console.log('▶️ Playing audio (audio was paused)');
             
             // Check if audio is ready to play
             if (audio.readyState >= 2) { // HAVE_CURRENT_DATA
@@ -237,7 +972,6 @@
                 
                 // Wait for audio to be ready, then play
                 const handleCanPlay = () => {
-                    console.log('✅ Audio now ready, attempting play');
                     audio.removeEventListener('canplay', handleCanPlay);
                     audio.play().catch(error => {
                         console.error('❌ Failed to play audio after canplay:', error);
@@ -254,20 +988,18 @@
         if (!browser) return;
         const audio = getAudioElement();
         audio.currentTime = Math.max(0, Math.min(duration, currentTime + seconds));
-        console.log('⏭️ Seeking to:', audio.currentTime);
     }
 
     function goToNext() {
         if (currentIndex < audios.length - 1) {
-            console.log('➡️ Going to next track, preserving playback state:', isPlaying);
             currentIndex++;
             scrollToCurrentItem();
+            checkNearEnd(); // Check if we need to load more content
         }
     }
 
     function goToPrevious() {
         if (currentIndex > 0) {
-            console.log('⬅️ Going to previous track, preserving playback state:', isPlaying);
             currentIndex--;
             scrollToCurrentItem();
         }
@@ -289,52 +1021,43 @@
         const newIndex = Math.round(scrollTop / itemHeight);
         
         if (newIndex !== currentIndex && newIndex >= 0 && newIndex < audios.length) {
-            console.log('📱 Scroll navigation: track', currentIndex, '→', newIndex, ', preserving playback state:', isPlaying);
             currentIndex = newIndex;
+            checkNearEnd(); // Check if we need to load more content
         }
     }
 
     function handleKeydown(event: KeyboardEvent) {
-        console.log('⌨️ KEY PRESSED:', event.key);
+
         
         switch (event.key) {
             case 'ArrowUp':
-                console.log('⬆️ Arrow Up - going to previous');
                 event.preventDefault();
                 goToPrevious();
                 break;
             case 'ArrowDown':
-                console.log('⬇️ Arrow Down - going to next');
                 event.preventDefault();
                 goToNext();
                 break;
             case ' ':
-                console.log('⏯️ Spacebar - toggling play');
                 event.preventDefault();
                 togglePlay();
                 break;
             case 'ArrowLeft':
-                console.log('⬅️ Arrow Left - seeking backward');
                 event.preventDefault();
                 seek(-10);
                 break;
             case 'ArrowRight':
-                console.log('➡️ Arrow Right - seeking forward');
                 event.preventDefault();
                 seek(10);
                 break;
             case 'c':
             case 'C':
-                console.log('💬 C key - opening comments');
                 event.preventDefault();
                 openCommentsDialog(currentIndex);
                 break;
             case 'l':
             case 'L':
-                console.log('❤️ L key - toggling favorite');
-                console.log('  - currentIndex:', currentIndex);
-                console.log('  - currentAudio:', currentAudio?.title);
-                console.log('  - audio element paused:', audioElement?.paused);
+                const currentAudioElement = getCurrentAudioElement();
                 event.preventDefault();
                 if (currentUser) {
                     toggleFavorite();
@@ -357,14 +1080,63 @@
         }
     }
 
+    async function loadMoreAudios() {
+        if (isLoadingMore || !hasMoreContent || !browser) {
+            console.log('⚠️ Cannot load more audios:', { isLoadingMore, hasMoreContent, browser });
+            return;
+        }
+
+        isLoadingMore = true;
+        const nextPage = currentPage + 1;
+        console.log('📄 Loading more audios, page:', nextPage);
+
+        try {
+            const response = await fetch(`/quickfeed?page=${nextPage}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            if (data.audios && data.audios.length > 0) {
+                // Append new audios to existing array
+                audios = [...audios, ...data.audios];
+                currentPage = nextPage;
+                
+                // Check if we've reached the end
+                if (data.audios.length < 50 || !data.audios.length) {
+                    hasMoreContent = false;
+                    console.log('📄 Reached end of content');
+                }
+                
+                console.log(`📄 Successfully loaded ${data.audios.length} more audios. Total: ${audios.length}`);
+            } else {
+                hasMoreContent = false;
+                console.log('📄 No more audios available');
+            }
+        } catch (error) {
+            console.error('❌ Failed to load more audios:', error);
+            // Don't set hasMoreContent to false on error, allow retry
+        } finally {
+            isLoadingMore = false;
+        }
+    }
+
+    function checkNearEnd() {
+        const nearEndThreshold = 10;
+        const isNearEnd = currentIndex >= audios.length - nearEndThreshold;
+        
+        if (isNearEnd && !isLoadingMore && hasMoreContent) {
+            console.log('📄 Near end detected, loading more content');
+            loadMoreAudios();
+        }
+    }
+
     async function toggleFavorite() {
         if (!currentUser || !currentAudio) return;
         
-        console.log('🔄 toggleFavorite called');
-        console.log('  - currentIndex:', currentIndex);
-        console.log('  - currentAudio:', currentAudio.title);
-        console.log('  - isFavorited before:', currentAudio.isFavorited);
-        console.log('  - audio playing before:', !audioElement?.paused);
+
+        const currentAudioElement = getCurrentAudioElement();
         
         const formData = new FormData();
         formData.append('audioId', currentAudio.id);
@@ -388,13 +1160,11 @@
                 }
                 audios = audios; // Trigger reactivity
                 
-                console.log('  - isFavorited after:', audios[currentIndex].isFavorited);
-                console.log('  - audio playing after:', !audioElement?.paused);
+                const currentAudioElementAfter = getCurrentAudioElement();
                 
                 // Announce the change for accessibility
                 const message = wasFavorited ? 'Removed from favorites' : 'Added to favorites';
                 announceStatus(message);
-                console.log('🔊 Announced:', message);
             }
         } catch (error) {
             console.error('Error toggling favorite:', error);
@@ -485,133 +1255,34 @@
         }
     }
 
-    function setupAudioListeners() {
-        if (!audioElement || !browser) return;
-        
-        console.log('🎧 Setting up audio event listeners');
-        
-        audioElement.addEventListener('loadstart', () => { 
-            console.log('🎵 Audio loading started');
-            isBuffering = true; 
-        });
-        
-        audioElement.addEventListener('canplay', () => { 
-            console.log('✅ Audio can play');
-            isBuffering = false;
-            
-            // Auto-play if user was previously playing audio
-            if (isPlaying && audioElement && audioElement.paused) {
-                console.log('🎵 Auto-playing new track (continuing playback state)');
-                audioElement.play().catch(error => {
-                    console.error('❌ Auto-play failed:', error);
-                    // Don't change isPlaying state - let user try manually
-                });
-            }
-        });
-        
-        audioElement.addEventListener('canplaythrough', () => { 
-            console.log('✅ Audio can play through completely');
-            
-            // Fallback auto-play if canplay didn't trigger it
-            if (isPlaying && audioElement && audioElement.paused) {
-                console.log('🎵 Fallback auto-play (canplaythrough)');
-                audioElement.play().catch(error => {
-                    console.error('❌ Fallback auto-play failed:', error);
-                });
-            }
-        });
-        
-        audioElement.addEventListener('play', () => { 
-            console.log('▶️ Audio playing event fired');
-            isPlaying = true;
-            isBuffering = false;
-            startPlayTracking();
-        });
-        
-        audioElement.addEventListener('pause', () => { 
-            console.log('⏸️ Audio paused event fired');
-            isPlaying = false;
-            stopPlayTracking();
-        });
-        
-        audioElement.addEventListener('timeupdate', () => { 
-            const newCurrentTime = audioElement!.currentTime;
-            const newDuration = audioElement!.duration;
-            
-            if (currentTime !== newCurrentTime || duration !== newDuration) {
-                console.log('⏰ Time update:', newCurrentTime.toFixed(2), '/', newDuration.toFixed(2));
-                currentTime = newCurrentTime;
-                duration = newDuration;
-            }
-            
-            // Check if we should register a play
-            if (playStartTime > 0 && !hasRegisteredPlay) {
-                tryRegisterPlay();
-            }
-        });
-        
-        audioElement.addEventListener('loadedmetadata', () => { 
-            console.log('📊 Audio metadata loaded, duration:', audioElement!.duration);
-            duration = audioElement!.duration || 0;
-            currentTime = 0;
-        });
-        
-        audioElement.addEventListener('durationchange', () => { 
-            console.log('⏱️ Duration changed:', audioElement!.duration);
-            duration = audioElement!.duration || 0;
-        });
-        
-        audioElement.addEventListener('error', (e) => {
-            console.error('❌ Audio error:', e);
-            if (audioElement!.error) {
-                const errorCode = audioElement!.error.code;
-                const errorMessage = audioElement!.error.message;
-                console.error('Audio error details:', errorCode, errorMessage);
-                
-                // Don't handle 404 errors here since they're handled by tryLoadAudioWithFallback
-                if (errorCode !== 4) { // 4 = MEDIA_ELEMENT_ERROR_SRC_NOT_SUPPORTED (includes 404)
-                    console.error('Non-404 audio error, cannot recover');
-                }
-            }
-            isBuffering = false;
-        });
-        
-        audioElement.addEventListener('stalled', () => {
-            console.warn('⚠️ Audio stalled');
-        });
-        
-        audioElement.addEventListener('waiting', () => {
-            console.log('⏳ Audio waiting for data');
-            isBuffering = true;
-        });
-        
-        console.log('✅ Audio event listeners set up successfully');
-    }
+    
 
     onMount(() => {
-        console.log('🚀 QuickfeedPlayer onMount called');
-        console.log('Browser detection:', browser);
-        console.log('CurrentAudio on mount:', currentAudio);
-        console.log('Audios array length:', audios?.length);
-        
+
         if (browser) {
-            console.log('✅ Adding keyboard event listener');
             document.addEventListener('keydown', handleKeydown);
         } else {
             console.error('❌ Browser detection failed - no keyboard events');
         }
         
-        // Initialize audio element right away
+        // Initialize audio pool and context
         if (browser) {
-            console.log('🎧 Initializing audio element');
-            getAudioElement(); // This will create and set up the audio element
+            initializeAudioPool();
+            
+            // Make debug toggle available globally for development
+            (window as any).toggleQuickfeedDebug = () => {
+                showDebugInfo = !showDebugInfo;
+                console.log('🐛 Debug panel:', showDebugInfo ? 'enabled' : 'disabled');
+            };
+            
         }
         
         // Debug check every second for the first 5 seconds
         let debugCount = 0;
         const debugInterval = setInterval(() => {
             debugCount++;
-            console.log(`🔍 Debug check ${debugCount}: audioElement =`, audioElement, 'currentAudio =', currentAudio?.title);
+            const currentAudioElement = getCurrentAudioElement();
+            console.log(`🔍 Debug check ${debugCount}: currentAudioElement =`, currentAudioElement, 'currentAudio =', currentAudio?.title);
             if (debugCount >= 5) {
                 clearInterval(debugInterval);
             }
@@ -756,6 +1427,16 @@
                 </div>
             </div>
         {/each}
+        
+        <!-- Loading indicator -->
+        {#if isLoadingMore}
+            <div class="audio-item loading-item">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <p>Loading more audios...</p>
+                </div>
+            </div>
+        {/if}
     </div>
     
     <!-- Comments Dialog -->
@@ -821,6 +1502,37 @@
     
     <!-- Status announcements for screen readers -->
     <div aria-live="polite" class="sr-only" bind:this={statusAnnouncement}></div>
+
+    <!-- Crossfade transition indicator -->
+    {#if isTransitioning}
+        <div class="transition-indicator">
+            <div class="transition-content">
+                <div class="transition-spinner"></div>
+                <span>Crossfading...</span>
+            </div>
+        </div>
+    {/if}
+
+    <!-- Debug Info Panel (for development) -->
+    {#if showDebugInfo}
+        <div class="debug-panel">
+            <h4>🐛 Ring Buffer Debug</h4>
+            <div class="debug-info">
+                <div>Context: {audioContext ? audioContext.state : 'null'}</div>
+                <div>Pool Size: {audioPool.length}</div>
+                <div>Active Slots: {audioPool.filter(s => s.isActive).length}</div>
+                <div>Current Index: {currentAudioIndex}</div>
+                <div>Transitioning: {isTransitioning ? '✅' : '❌'}</div>
+                <div>Current Audio: {currentAudio?.title?.substring(0, 15)}...</div>
+                <div>Is Playing: {isPlaying ? '▶️' : '⏸️'}</div>
+                {#each audioPool as slot, i}
+                    <div class="slot-info" class:active={i === currentAudioIndex}>
+                        Slot {i}: {slot.isActive ? '🔴' : '⚫'} {slot.fadeType || 'none'} {slot.trackId?.substring(0, 8) || 'empty'}
+                    </div>
+                {/each}
+            </div>
+        </div>
+    {/if}
 
     <!-- Keyboard Hints (Desktop) / Touch Hints (Mobile) -->
     <div class="control-hints">
@@ -962,9 +1674,93 @@
         animation: spin 1s linear infinite;
     }
 
+    .loading-item {
+        background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+    }
+
+    .loading-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        height: 100%;
+        color: white;
+    }
+
+    .loading-content p {
+        font-size: 1.1rem;
+        margin: 0;
+        opacity: 0.9;
+    }
+
+    .transition-indicator {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        z-index: 2000;
+        color: white;
+        font-size: 0.9rem;
+    }
+
+    .transition-content {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .transition-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
+    }
+
+    .debug-panel {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 0.8rem;
+        z-index: 1500;
+        min-width: 200px;
+    }
+
+    .debug-panel h4 {
+        margin: 0 0 0.5rem 0;
+        color: #ff6b6b;
+    }
+
+    .debug-info div {
+        margin-bottom: 0.3rem;
+        padding: 0.2rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .slot-info {
+        font-size: 0.7rem;
+        opacity: 0.7;
+    }
+
+    .slot-info.active {
+        color: #ff6b6b;
+        font-weight: bold;
+        opacity: 1;
     }
 
     .progress-bar {
