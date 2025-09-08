@@ -37,7 +37,7 @@
             <span style="color: red">(Pending review)</span> |{" "}
         {/if}
         <a href={`/listen/${audio.id}`}>{audio.title}</a>
-        <span class="stats"> | {audio.playsString} | {favoritesString})</span>
+        <span class="stats"> | {audio.playsString} | {favoritesString}</span>
     </h3>
     {#if audio.user}
         <p>
