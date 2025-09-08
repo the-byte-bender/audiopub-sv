@@ -45,6 +45,9 @@ export const load: PageServerLoad = async (event) => {
     if (validatedSortField === "random") {
         // Use Sequelize.fn('RAND') for MariaDB/MySQL random ordering
         order = [Sequelize.fn('RAND')];
+    } else if (validatedSortField === "favoriteCount") {
+        // Order by favorite count using subquery
+        order = [[Sequelize.literal('(SELECT COUNT(*) FROM AudioFavorites WHERE audioId = Audio.id)'), validatedSortOrder]];
     } else {
         order = [[validatedSortField, validatedSortOrder]];
     }
@@ -59,7 +62,6 @@ export const load: PageServerLoad = async (event) => {
         },
     });
 
-    // Query 2: Get favorite data efficiently 
     const audioIds = audios.rows.map(audio => audio.id);
     const currentUser = event.locals.user;
     
