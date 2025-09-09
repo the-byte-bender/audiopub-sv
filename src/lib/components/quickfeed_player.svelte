@@ -90,7 +90,7 @@
     function initializeAudioPool() {
         if (!browser || audioPool.length > 0) return;
         
-        console.log('🔄 Initializing dynamic audio pool with', INITIAL_POOL_SIZE, 'elements');
+        console.log('Initializing dynamic audio pool with', INITIAL_POOL_SIZE, 'elements');
         
         for (let i = 0; i < INITIAL_POOL_SIZE; i++) {
             addSlotToPool();
@@ -99,7 +99,7 @@
     
     function addSlotToPool(): number {
         if (audioPool.length >= MAX_POOL_SIZE) {
-            console.log('⚠️ Pool at maximum size, cannot add more slots');
+            console.log('Pool at maximum size, cannot add more slots');
             return -1;
         }
         
@@ -494,7 +494,7 @@
                     if (currentNodesReady && slot.gainNode && slot.filterNode) {
                         validCurrentSlots.push(slot);
                     } else {
-                        console.log('❌ Failed to create Web Audio nodes for current slot, will skip crossfade');
+                        console.log('Failed to create Web Audio nodes for current slot, will skip crossfade');
                     }
                 } else {
                     validCurrentSlots.push(slot);
@@ -504,7 +504,7 @@
             
             // If no current slots exist or have valid nodes, this is effectively a "first play"
             if (validCurrentSlots.length === 0) {
-                console.log('🎵 No current audio to crossfade from - direct play new audio');
+                console.log('No current audio to crossfade from - direct play new audio');
             }
 
             // Step 5: Load new audio
@@ -541,29 +541,38 @@
             for (const slot of validCurrentSlots) {
                 // if (slot === newSlot) continue;
                 if (slot.gainNode && slot.filterNode) {
-                    console.log('🔽 Fading out slot with track:', slot.trackId);
                     
                     slot.fadeType = 'out';
                     slot.fadeStartTime = startTime;
                     
-                    // Fade out volume and apply lowpass
+                    // Fade out volume and apply lowpass filter
                     slot.gainNode.gain.cancelScheduledValues(startTime);
                     slot.gainNode.gain.setValueAtTime(1, startTime);
                     slot.gainNode.gain.linearRampToValueAtTime(0, endTime);
                     
+                    // IMPORTANT: Set filter type to lowpass for proper fadeout
+                    slot.filterNode.type = 'lowpass';
                     slot.filterNode.frequency.cancelScheduledValues(startTime);
-                    slot.filterNode.frequency.setValueAtTime(20000, startTime);
-                    slot.filterNode.frequency.exponentialRampToValueAtTime(300, endTime);
+                    slot.filterNode.frequency.setValueAtTime(20000, startTime); // Start clear
+                    slot.filterNode.frequency.exponentialRampToValueAtTime(300, endTime); // End muffled
                     
                     // Schedule event-based cleanup after fade completes
                     const cleanupFadedSlot = () => {
-                        console.log('🧹 Event-based cleanup of faded out slot');
                         slot.element.pause();
                         slot.element.currentTime = 0;
                         slot.isActive = false;
                         slot.fadeType = null;
                         slot.trackId = null;
                         slot.lastUsedTime = Date.now();
+                        
+                        // Reset Web Audio nodes to default state for next use
+                        if (slot.gainNode && audioContext) {
+                            slot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+                        }
+                        if (slot.filterNode && audioContext) {
+                            slot.filterNode.type = 'lowpass';
+                            slot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+                        }
                     };
                     
                     // Use Web Audio event timing for precise cleanup
@@ -604,8 +613,8 @@
                 // Set up highpass filter for fade in (start heavily filtered, become clear)
                 newSlot.filterNode.type = 'highpass';
                 newSlot.filterNode.frequency.cancelScheduledValues(startTime);
-                newSlot.filterNode.frequency.setValueAtTime(20000, startTime); // Start very filtered (thin sound)
-                newSlot.filterNode.frequency.exponentialRampToValueAtTime(20, endTime); // End minimal filter (full sound)
+                newSlot.filterNode.frequency.setValueAtTime(20000, startTime); // Start heavily filtered (thin sound)
+                newSlot.filterNode.frequency.exponentialRampToValueAtTime(20, endTime); // End minimally filtered (full sound)
                 
                 newSlot.gainNode.gain.cancelScheduledValues(startTime);
                 newSlot.gainNode.gain.setValueAtTime(0, startTime);
@@ -639,7 +648,6 @@
             const failureCurrentSlots = audioPool.filter(slot => slot.isActive && slot.fadeType !== 'out');
             for (const slot of failureCurrentSlots) {
                 const slotIndex = audioPool.indexOf(slot);
-                console.log(`🛑 Force-stopping slot ${slotIndex} due to crossfade failure`);
                 cleanupAudioSlot(slot, slotIndex);
             }
             
@@ -703,11 +711,11 @@
                 return; // Crossfade handled everything
             }
         } else if (useCrossfade) {
-            console.log('⚠️ Crossfade skipped - not currently playing');
+            console.log('Crossfade skipped - not currently playing');
         }
 
         // Fallback to normal loading using ring buffer
-        console.log('📻 Using fallback loading');
+        console.log('Using fallback loading');
         
         if (audioPool.length === 0) {
             initializeAudioPool();
@@ -772,12 +780,12 @@
             
             // Set up one-time error handler for fallback
             const handleTranscodedError = () => {
-                console.log('❌ Transcoded audio failed, falling back to original');
+                console.log('Transcoded audio failed, falling back to original');
                 audio.removeEventListener('error', handleTranscodedError);
                 
                 // Try original audio as fallback
                 const originalSrc = `/${currentAudio.path}`;
-                console.log('🔄 Trying original audio:', originalSrc);
+                console.log('Trying original audio:', originalSrc);
                 audio.src = originalSrc;
                 audio.load();
             };
@@ -788,12 +796,12 @@
         } else {
             // No transcoded version, use original directly
             const originalSrc = `/${currentAudio.path}`;
-            console.log('⚠️ Using original audio (no transcoded):', originalSrc);
+            console.log('Using original audio (no transcoded):', originalSrc);
             audio.src = originalSrc;
             audio.load();
         }
         
-        console.log('📻 Audio load() called, src:', audio.src);
+        console.log('Audio load() called, src:', audio.src);
     }
 
     function tryLoadAudioWithFallbackAndActivate(audio: HTMLAudioElement, slot: typeof audioPool[0], slotIndex: number) {
@@ -809,9 +817,9 @@
                 await ensureAudioContext();
                 const nodesCreated = createAudioNodes(slot);
                 if (nodesCreated) {
-                    console.log(`✅ Web Audio nodes created for slot ${slotIndex}`);
+                    console.log(`Web Audio nodes created for slot ${slotIndex}`);
                 } else {
-                    console.log(`⚠️ Failed to create Web Audio nodes for slot ${slotIndex}`);
+                    console.log(`Failed to create Web Audio nodes for slot ${slotIndex}`);
                 }
             }
             
@@ -842,18 +850,18 @@
             
             // Set up one-time error handler for fallback
             const handleTranscodedError = () => {
-                console.log('❌ Transcoded audio failed, falling back to original');
+                console.log('Transcoded audio failed, falling back to original');
                 audio.removeEventListener('error', handleTranscodedError);
                 
                 if (!loadAttempted) {
                     loadAttempted = true;
                     // Try original audio as fallback
                     const originalSrc = `/${currentAudio.path}`;
-                    console.log('🔄 Trying original audio:', originalSrc);
+                    console.log('Trying original audio:', originalSrc);
                     
                     // Set up error handler for original audio failure
                     const handleOriginalError = () => {
-                        console.log('❌ Original audio also failed');
+                        console.log('Original audio also failed');
                         audio.removeEventListener('error', handleOriginalError);
                         handleLoadFailure('Both transcoded and original audio failed');
                     };
@@ -872,10 +880,10 @@
         } else {
             // No transcoded version, use original directly
             const originalSrc = `/${currentAudio.path}`;
-            console.log('⚠️ Using original audio (no transcoded):', originalSrc);
+            console.log('Using original audio (no transcoded):', originalSrc);
             
             const handleOriginalError = () => {
-                console.log('❌ Original audio failed to load');
+                console.log('Original audio failed to load');
                 audio.removeEventListener('error', handleOriginalError);
                 handleLoadFailure('Original audio failed to load');
             };
@@ -885,11 +893,12 @@
             audio.load();
         }
         
-        console.log('📻 Audio load() called, src:', audio.src);
+        console.log('Audio load() called, src:', audio.src);
     }
 
     function openCommentsDialog(index: number) {
-        currentIndex = index;
+        // Use scroll-based navigation to avoid double crossfade
+        scrollToIndex(index);
         if (commentsDialog && browser) {
             commentsDialog.showModal();
         }
@@ -967,7 +976,7 @@
                     isBuffering = false;
                 });
             } else {
-                console.log('⏳ Audio not ready, waiting for canplay event');
+                console.log('Audio not ready, waiting for canplay event');
                 isBuffering = true;
                 
                 // Wait for audio to be ready, then play
@@ -992,26 +1001,34 @@
 
     function goToNext() {
         if (currentIndex < audios.length - 1) {
-            currentIndex++;
-            scrollToCurrentItem();
+            // Don't change currentIndex directly - let scroll handle it
+            const targetIndex = currentIndex + 1;
+            scrollToIndex(targetIndex);
             checkNearEnd(); // Check if we need to load more content
         }
     }
 
     function goToPrevious() {
         if (currentIndex > 0) {
-            currentIndex--;
-            scrollToCurrentItem();
+            // Don't change currentIndex directly - let scroll handle it  
+            const targetIndex = currentIndex - 1;
+            scrollToIndex(targetIndex);
         }
     }
 
-    function scrollToCurrentItem() {
+    function scrollToIndex(targetIndex: number) {
         if (!scrollContainer || !browser) return;
         const itemHeight = window.innerHeight;
+        const targetScrollTop = targetIndex * itemHeight;
+        
         scrollContainer.scrollTo({
-            top: currentIndex * itemHeight,
+            top: targetScrollTop,
             behavior: 'smooth'
         });
+    }
+    
+    function scrollToCurrentItem() {
+        scrollToIndex(currentIndex);
     }
 
     function handleScroll() {
@@ -1064,7 +1081,7 @@
                 }
                 break;
             default:
-                console.log('🔘 Unhandled key:', event.key);
+                console.log('Unhandled key:', event.key);
         }
     }
 
@@ -1082,13 +1099,13 @@
 
     async function loadMoreAudios() {
         if (isLoadingMore || !hasMoreContent || !browser) {
-            console.log('⚠️ Cannot load more audios:', { isLoadingMore, hasMoreContent, browser });
+            console.log('Cannot load more audios:', { isLoadingMore, hasMoreContent, browser });
             return;
         }
 
         isLoadingMore = true;
         const nextPage = currentPage + 1;
-        console.log('📄 Loading more audios, page:', nextPage);
+        console.log('Loading more audios, page:', nextPage);
 
         try {
             const response = await fetch(`/quickfeed?page=${nextPage}`);
@@ -1106,16 +1123,16 @@
                 // Check if we've reached the end
                 if (data.audios.length < 50 || !data.audios.length) {
                     hasMoreContent = false;
-                    console.log('📄 Reached end of content');
+                    console.log('Reached end of content');
                 }
                 
-                console.log(`📄 Successfully loaded ${data.audios.length} more audios. Total: ${audios.length}`);
+                console.log(`Successfully loaded ${data.audios.length} more audios. Total: ${audios.length}`);
             } else {
                 hasMoreContent = false;
-                console.log('📄 No more audios available');
+                console.log('No more audios available');
             }
         } catch (error) {
-            console.error('❌ Failed to load more audios:', error);
+            console.error('Failed to load more audios:', error);
             // Don't set hasMoreContent to false on error, allow retry
         } finally {
             isLoadingMore = false;
@@ -1127,7 +1144,7 @@
         const isNearEnd = currentIndex >= audios.length - nearEndThreshold;
         
         if (isNearEnd && !isLoadingMore && hasMoreContent) {
-            console.log('📄 Near end detected, loading more content');
+            console.log('Near end detected, loading more content');
             loadMoreAudios();
         }
     }
@@ -1272,7 +1289,7 @@
             // Make debug toggle available globally for development
             (window as any).toggleQuickfeedDebug = () => {
                 showDebugInfo = !showDebugInfo;
-                console.log('🐛 Debug panel:', showDebugInfo ? 'enabled' : 'disabled');
+                console.log('Debug panel:', showDebugInfo ? 'enabled' : 'disabled');
             };
             
         }
@@ -1282,7 +1299,7 @@
         const debugInterval = setInterval(() => {
             debugCount++;
             const currentAudioElement = getCurrentAudioElement();
-            console.log(`🔍 Debug check ${debugCount}: currentAudioElement =`, currentAudioElement, 'currentAudio =', currentAudio?.title);
+            console.log(`Debug check ${debugCount}: currentAudioElement =`, currentAudioElement, 'currentAudio =', currentAudio?.title);
             if (debugCount >= 5) {
                 clearInterval(debugInterval);
             }
@@ -1317,7 +1334,7 @@
                     <div class="audio-controls">
                         <div class="waveform-container">
                             <div class="play-button" class:playing={isPlaying && index === currentIndex}>
-                                <button on:click={() => {console.log('🖱️ PLAY BUTTON CLICKED!'); togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
+                                <button on:click={() => {togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
                                     {#if isBuffering && index === currentIndex}
                                         <div class="loading-spinner"></div>
                                     {:else if isPlaying && index === currentIndex}
@@ -1346,12 +1363,7 @@
                                         <span title="Current time: {currentTime}">{formatTime(currentTime)}</span>
                                         <span title="Duration: {duration}">{formatTime(duration)}</span>
                                     </div>
-                                    <!-- Debug info (remove in production) -->
-                                    {#if duration === 0 && currentTime === 0}
-                                        <div class="debug-info" style="font-size: 0.7rem; color: #ff6666; margin-top: 0.2rem;">
-                                            Debug: duration={duration}, currentTime={currentTime}
-                                        </div>
-                                    {/if}
+
                                 </div>
                             {/if}
                         </div>
@@ -1381,7 +1393,7 @@
                             <button 
                                 class="action-btn favorite-btn" 
                                 class:favorited={audio.isFavorited}
-                                on:click={() => {currentIndex = index; toggleFavorite();}}
+                                on:click={() => {scrollToIndex(index); toggleFavorite();}}
                                 aria-label={audio.isFavorited ? "Remove from favorites" : "Add to favorites"}
                             >
                                 <svg width="32" height="32" viewBox="0 0 24 24" fill={audio.isFavorited ? "#ff6b6b" : "none"} stroke="white" stroke-width="2">
@@ -1404,7 +1416,7 @@
                         <button 
                             class="action-btn share-btn"
                             on:click={() => {
-                                currentIndex = index; 
+                                scrollToIndex(index); 
                                 if (browser) {
                                     if (navigator.share) {
                                         navigator.share({url: `/listen/${audio.id}`});
