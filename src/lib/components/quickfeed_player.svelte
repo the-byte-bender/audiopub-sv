@@ -1281,10 +1281,31 @@
     }
 
     function handleWheel(event: WheelEvent) {
+        event.preventDefault();
         if (event.deltaY > 0) {
             goToNext();
         } else {
             goToPrevious();
+        }
+    }
+
+    let touchStartY = 0;
+
+    function handleTouchStart(event: TouchEvent) {
+
+        touchStartY = event.touches[0].clientY;
+    }
+
+    function handleTouchEnd(event: TouchEvent) {
+        const touchEndY = event.changedTouches[0].clientY;
+        const deltaY = touchEndY - touchStartY;
+
+        if (deltaY > 10) { // Swipe down
+                event.preventDefault();
+            goToPrevious();
+        } else if (deltaY < -10) { // Swipe up
+                event.preventDefault();
+            goToNext();
         }
     }
 
@@ -1327,7 +1348,7 @@
     });
 </script>
 
-<div class="quickfeed-container" on:wheel={handleWheel}>
+<div class="quickfeed-container" on:wheel={handleWheel} on:touchstart={handleTouchStart} on:touchend={handleTouchEnd}>
     
     <div class="quickfeed-content">
         {#if audios[currentIndex]}
@@ -1342,8 +1363,8 @@
                     <!-- Audio Controls (Center) -->
                     <div 
                         class="audio-controls"
-                        on:touchstart={handleHorizontalSwipe}
-                        on:touchend={handleHorizontalSwipeEnd}
+                        on:touchstart={handleTouchStart}
+                        on:touchend={handleTouchEnd}
                     >
                         <div class="waveform-container">
                             <div class="play-button" class:playing={isPlaying}>
