@@ -31,7 +31,6 @@
     let isTransitioning = false;
     let currentTime = 0;
     let duration = 0;
-    let scrollContainer: HTMLElement;
     let isBuffering = false;
     let commentsDialog: HTMLDialogElement;
     let statusAnnouncement: HTMLElement;
@@ -44,6 +43,7 @@
     let isLoadingMore = false;
     let currentPage = 1;
     let hasMoreContent = true;
+    
     
     // Debug flag (can be toggled in console: window.debugQuickfeed = true)
     let showDebugInfo = false;
@@ -1007,61 +1007,25 @@
         audio.currentTime = Math.max(0, Math.min(duration, currentTime + seconds));
     }
 
+
     function goToNext() {
         if (currentIndex < audios.length - 1) {
-            // Don't change currentIndex directly - let scroll handle it
-            const targetIndex = currentIndex + 1;
-            scrollToIndex(targetIndex);
-            checkNearEnd(); // Check if we need to load more content
+            currentIndex++;
+            
+            // Check if we need to load more content
+            if (currentIndex > audios.length - 3) {
+                checkNearEnd();
+            }
         }
     }
 
     function goToPrevious() {
         if (currentIndex > 0) {
-            // Don't change currentIndex directly - let scroll handle it  
-            const targetIndex = currentIndex - 1;
-            scrollToIndex(targetIndex);
+            currentIndex--;
         }
     }
 
-    function scrollToIndex(targetIndex: number) {
-        if (!scrollContainer || !browser) return;
-        const itemHeight = window.innerHeight;
-        const targetScrollTop = targetIndex * itemHeight;
-        
-        scrollContainer.scrollTo({
-            top: targetScrollTop,
-            behavior: 'smooth'
-        });
-    }
-    
-    function scrollToCurrentItem() {
-        scrollToIndex(currentIndex);
-    }
 
-    function handleScroll() {
-        if (!scrollContainer || !browser) return;
-        
-        const scrollTop = scrollContainer.scrollTop;
-        const itemHeight = window.innerHeight;
-        const newIndex = Math.round(scrollTop / itemHeight);
-        
-        // More responsive scroll handling
-        if (newIndex !== currentIndex && newIndex >= 0 && newIndex < audios.length) {
-            const previousIndex = currentIndex;
-            currentIndex = newIndex;
-            
-            // Load audio for new index with crossfade
-            if (audios[currentIndex]) {
-                loadAudio(true); // Use crossfade for smooth transitions
-            }
-            
-            // Check if we need to load more content
-            checkNearEnd();
-            
-            console.log(`📜 Scrolled from ${previousIndex} to ${currentIndex}`);
-        }
-    }
 
     function handleKeydown(event: KeyboardEvent) {
         // Check if comments modal is open
@@ -1350,13 +1314,11 @@
 
 <div class="quickfeed-container">
     
-    <div 
-        class="scroll-container" 
-        bind:this={scrollContainer} 
-        on:scroll={handleScroll}
-    >
-        {#each audios as audio, index (audio.id)}
-            <div class="audio-item" class:active={index === currentIndex}>
+    <div class="quickfeed-content">
+        {#if audios[currentIndex]}
+            {@const audio = audios[currentIndex]}
+            <div class="audio-item">
+
                 <div class="background-blur">
                     <!-- Add a subtle background pattern or blur effect -->
                 </div>
@@ -1369,11 +1331,11 @@
                         on:touchend={handleHorizontalSwipeEnd}
                     >
                         <div class="waveform-container">
-                            <div class="play-button" class:playing={isPlaying && index === currentIndex}>
+                            <div class="play-button" class:playing={isPlaying}>
                                 <button on:click={() => {togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
-                                    {#if isBuffering && index === currentIndex}
+                                    {#if isBuffering}
                                         <div class="loading-spinner"></div>
-                                    {:else if isPlaying && index === currentIndex}
+                                    {:else if isPlaying}
                                         <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
                                             <rect x="6" y="4" width="4" height="16" />
                                             <rect x="14" y="4" width="4" height="16" />
@@ -1386,7 +1348,6 @@
                                 </button>
                             </div>
                             
-                            {#if index === currentIndex}
                                 <div class="progress-bar">
                                     <div class="progress-track">
                                         <div 
@@ -1401,7 +1362,6 @@
                                     </div>
 
                                 </div>
-                            {/if}
                         </div>
                     </div>
                     
@@ -1419,7 +1379,7 @@
                         <div class="stats">
                             <span>{audio.playsString}</span>
                             <span>•</span>
-                            <span>{index === currentIndex ? favoritesString : `${audio.favoriteCount || 0} favorites`}</span>
+                            <span>{favoritesString}</span>
                         </div>
                     </div>
                     
@@ -1474,9 +1434,10 @@
                     </div>
                 </div>
             </div>
-        {/each}
+        {/if}
+    </div>
         
-        <!-- Loading indicator -->
+    <!-- Loading indicator -->
         {#if isLoadingMore}
             <div class="audio-item loading-item">
                 <div class="loading-content">
@@ -1485,7 +1446,6 @@
                 </div>
             </div>
         {/if}
-    </div>
     
     <!-- Comments Dialog -->
     <dialog bind:this={commentsDialog} class="comments-dialog">
@@ -1623,44 +1583,24 @@
         border: 0;
     }
 
-    .scroll-container {
+    .quickfeed-content {
         width: 100%;
         height: 100%;
-        overflow-y: auto;
-        scroll-snap-type: y mandatory;
-        scroll-behavior: smooth;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
-        /* Improve scroll performance */
-        will-change: scroll-position;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .scroll-container::-webkit-scrollbar {
-        display: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .audio-item {
         width: 100%;
         height: 100vh;
-        scroll-snap-align: start;
-        scroll-snap-stop: always;
         position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-        /* Improve rendering performance */
-        transform: translateZ(0);
     }
 
-    .audio-item:nth-child(even) {
-        background: linear-gradient(135deg, #614385 0%, #516395 100%);
-    }
-
-    .audio-item:nth-child(3n) {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
 
     .background-blur {
         position: absolute;
@@ -2101,11 +2041,6 @@
             gap: 0.5rem;
         }
 
-        .scroll-container {
-            /* Optimize touch scrolling on mobile */
-            touch-action: pan-y;
-            overscroll-behavior: contain;
-        }
 
         .audio-item {
             /* Ensure full viewport coverage on mobile */
