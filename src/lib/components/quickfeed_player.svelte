@@ -906,7 +906,6 @@
 
     function openCommentsDialog(index: number) {
         // Use scroll-based navigation to avoid double crossfade
-        scrollToIndex(index);
         if (commentsDialog && browser) {
             commentsDialog.showModal();
         }
