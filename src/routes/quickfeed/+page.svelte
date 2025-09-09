@@ -19,13 +19,35 @@
 <script lang="ts">
     import title from "$lib/title";
     import QuickfeedPlayer from "$lib/components/quickfeed_player.svelte";
+    import { beforeNavigate, afterNavigate } from "$app/navigation";
     import type { PageData } from "./$types";
 
     export let data: PageData;
     title.set("Quickfeed");
+
+    let quickfeedPlayerRef: QuickfeedPlayer;
+
+    // Auto-pause audio when navigating away from quickfeed page
+    beforeNavigate((navigation) => {
+        // Only pause if navigating away from quickfeed page
+        if (navigation.to?.route?.id !== '/quickfeed') {
+            quickfeedPlayerRef?.pauseAudio();
+        }
+    });
+
+    // Auto-play audio when navigating to quickfeed page
+    afterNavigate((navigation) => {
+        // Only auto-play if we just navigated TO the quickfeed page
+        if (navigation.to?.route?.id === '/quickfeed' && navigation.from?.route?.id !== '/quickfeed') {
+            // Small delay to ensure component is fully mounted
+            setTimeout(() => {
+                quickfeedPlayerRef?.startAutoPlay();
+            }, 100);
+        }
+    });
 </script>
 
-<QuickfeedPlayer audios={data.audios} currentUser={data.user} />
+<QuickfeedPlayer bind:this={quickfeedPlayerRef} audios={data.audios} currentUser={data.user} />
 
 <style>
     :global(body) {

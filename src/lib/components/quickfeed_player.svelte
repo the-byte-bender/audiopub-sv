@@ -22,6 +22,7 @@
     import CommentList from "./comment_list.svelte";
     import { onMount, onDestroy } from "svelte";
     import { enhance } from "$app/forms";
+    import title from "$lib/title";
 
     export let audios: ClientsideAudio[];
     export let currentUser: ClientsideUser | null = null;
@@ -51,7 +52,7 @@
     // Dynamic ring buffer audio system
     let audioContext: AudioContext | null = null;
     let masterGainNode: GainNode | null = null;
-    let masterVolume = 1.0;
+    let masterVolume = 0.7;
     
     // Dynamic pool configuration
     const MIN_POOL_SIZE = 2;
@@ -745,6 +746,13 @@
         return `${count} favorites`;
     })();
 
+    // Update page title when current audio changes
+    $: if (currentAudio?.title) {
+        title.set(currentAudio.title);
+    } else {
+        title.set("Quickfeed");
+    }
+
     // Reactive statement to load audio when current index changes
     $: if (audios[currentIndex] && browser) {
 
@@ -1026,6 +1034,29 @@
         }
     }
 
+    // Function to pause audio that can be called from parent component
+    export function pauseAudio() {
+        if (!browser) return;
+        
+        const audio = getAudioElement();
+        if (!audio.paused) {
+            audio.pause();
+        }
+    }
+
+    // Function to start auto-play that can be called from parent component
+    export async function startAutoPlay() {
+        if (!browser) return;
+        
+        try {
+            // Try to start playing automatically
+            await togglePlay();
+        } catch (error) {
+            // Autoplay blocked by browser policy
+            console.log('Auto-play blocked by browser, waiting for user interaction');
+        }
+    }
+
     async function togglePlay() {
 
         if (!browser) {
@@ -1043,6 +1074,12 @@
                 console.error('❌ Failed to initialize audio context');
                 return;
             }
+            
+            // For first play, we need to load the audio properly through our system
+            // This ensures Web Audio nodes are connected
+            isPlaying = true; // Set playing state before loading
+            await loadAudio(false);
+            return; // loadAudio will handle the actual playback
         }
         
         // Use actual audio state instead of component state for more reliability
@@ -1477,21 +1514,44 @@
                     <!-- Audio Controls (Center) -->
                     <div class="audio-controls">
                         <div class="waveform-container">
-                            <div class="play-button" class:playing={isPlaying}>
-                                <button on:click={() => {togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
-                                    {#if isBuffering}
-                                        <div class="loading-spinner"></div>
-                                    {:else if isPlaying}
-                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
-                                            <rect x="6" y="4" width="4" height="16" />
-                                            <rect x="14" y="4" width="4" height="16" />
+                            <div class="navigation-controls">
+                                <!-- Previous Button -->
+                                <div class="nav-button previous-button">
+                                    <button on:click={() => {goToPrevious();}} aria-label="Previous audio">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                            <polygon points="11,7 6,12 11,17" />
+                                            <polygon points="18,7 13,12 18,17" />
                                         </svg>
-                                    {:else}
-                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
-                                            <polygon points="5,3 19,12 5,21" />
+                                    </button>
+                                </div>
+                                
+                                <!-- Play/Pause Button -->
+                                <div class="play-button" class:playing={isPlaying}>
+                                    <button on:click={() => {togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
+                                        {#if isBuffering}
+                                            <div class="loading-spinner"></div>
+                                        {:else if isPlaying}
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                                <rect x="6" y="4" width="4" height="16" />
+                                                <rect x="14" y="4" width="4" height="16" />
+                                            </svg>
+                                        {:else}
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                                <polygon points="5,3 19,12 5,21" />
+                                            </svg>
+                                        {/if}
+                                    </button>
+                                </div>
+                                
+                                <!-- Next Button -->
+                                <div class="nav-button next-button">
+                                    <button on:click={() => {goToNext();}} aria-label="Next audio">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                                            <polygon points="13,7 18,12 13,17" />
+                                            <polygon points="6,7 11,12 6,17" />
                                         </svg>
-                                    {/if}
-                                </button>
+                                    </button>
+                                </div>
                             </div>
                             
                                 <div class="progress-bar">
@@ -1789,6 +1849,12 @@
         gap: 2rem;
     }
 
+    .navigation-controls {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
     .play-button button {
         width: 80px;
         height: 80px;
@@ -1806,6 +1872,29 @@
     .play-button button:hover {
         background: rgba(255, 255, 255, 0.3);
         transform: scale(1.1);
+    }
+
+    .nav-button button {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+
+    .nav-button button:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: scale(1.05);
+    }
+
+    .nav-button button:active {
+        transform: scale(0.95);
     }
 
     .loading-spinner {
