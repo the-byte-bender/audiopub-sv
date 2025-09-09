@@ -63,6 +63,7 @@
         gainNode: GainNode | null;
         filterNode: BiquadFilterNode | null;
         source: MediaElementAudioSourceNode | null;
+        analyserNode: AnalyserNode | null;
         isActive: boolean;
         trackId: string | null;
         fadeStartTime: number;
@@ -110,6 +111,7 @@
             gainNode: null,
             filterNode: null,
             source: null,
+            analyserNode: null,
             isActive: false,
             trackId: null,
             fadeStartTime: 0,
@@ -199,16 +201,22 @@
 
         try {
             const source = audioContext.createMediaElementSource(audioSlot.element);
+            const analyserNode = audioContext.createAnalyser();
             const gainNode = audioContext.createGain();
             const filterNode = audioContext.createBiquadFilter();
+
+            // Set up analyser for audio output detection
+            analyserNode.fftSize = 256; // Small size for efficiency
+            analyserNode.smoothingTimeConstant = 0.3;
 
             // Set up filter defaults
             filterNode.type = 'lowpass';
             filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
             filterNode.Q.setValueAtTime(1, audioContext.currentTime);
 
-            // Connect the audio graph: source -> filter -> gain -> master gain -> destination
-            source.connect(filterNode);
+            // Connect the audio graph: source -> analyser -> filter -> gain -> master gain -> destination
+            source.connect(analyserNode);
+            analyserNode.connect(filterNode);
             filterNode.connect(gainNode);
             if (masterGainNode) {
                 gainNode.connect(masterGainNode);
@@ -218,6 +226,7 @@
 
             // Store references
             audioSlot.source = source;
+            audioSlot.analyserNode = analyserNode;
             audioSlot.gainNode = gainNode;
             audioSlot.filterNode = filterNode;
 
@@ -462,6 +471,63 @@
         return audioContext.state === 'running';
     }
 
+    function waitForAudioOutput(
+        slot: typeof audioPool[0], 
+        onAudioDetected: () => void, 
+        timeoutMs = 2000
+    ): void {
+        if (!slot.analyserNode) {
+            console.warn('No analyser node available, starting crossfade immediately');
+            onAudioDetected();
+            return;
+        }
+
+        const analyser = slot.analyserNode;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const startTime = Date.now();
+        let detectionFrameCount = 0;
+
+        function checkAudioOutput() {
+            const currentTime = Date.now();
+            
+            // Timeout fallback
+            if (currentTime - startTime > timeoutMs) {
+                console.warn('Audio output detection timeout, starting crossfade anyway');
+                onAudioDetected();
+                return;
+            }
+
+            // Get frequency data
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Check for audio signal (look for values above noise floor)
+            let signalLevel = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                signalLevel += dataArray[i];
+            }
+            
+            const averageLevel = signalLevel / dataArray.length;
+            const hasSignal = averageLevel > 2; // Threshold above noise floor
+            
+            if (hasSignal) {
+                // Require consistent signal for a few frames to avoid false positives
+                detectionFrameCount++;
+                if (detectionFrameCount >= 3) {
+                    console.log(`Audio output detected after ${currentTime - startTime}ms`);
+                    onAudioDetected();
+                    return;
+                }
+            } else {
+                detectionFrameCount = 0; // Reset if no signal
+            }
+            
+            // Continue checking
+            requestAnimationFrame(checkAudioOutput);
+        }
+
+        // Start monitoring
+        requestAnimationFrame(checkAudioOutput);
+    }
 
     async function ringBufferCrossfade(audioSrc: string, trackId: string, transitionDuration = 600): Promise<boolean> {
         
@@ -541,105 +607,113 @@
                 newSlot.element.load();
             });
 
-            // Step 6: Start crossfade (new audio loaded successfully)
-            const startTime = audioContext.currentTime;
-            const endTime = startTime + (transitionDuration / 1000);
-            
-            // Fade out all currently playing audio (use validated slots only)
-            for (const slot of validCurrentSlots) {
-                // if (slot === newSlot) continue;
-                if (slot.gainNode && slot.filterNode) {
-                    
-                    slot.fadeType = 'out';
-                    slot.fadeStartTime = startTime;
-                    
-                    // Fade out volume and apply lowpass filter
-                    slot.gainNode.gain.cancelScheduledValues(startTime);
-                    slot.gainNode.gain.setValueAtTime(1, startTime);
-                    slot.gainNode.gain.linearRampToValueAtTime(0, endTime);
-                    
-                    // IMPORTANT: Set filter type to lowpass for proper fadeout
-                    slot.filterNode.type = 'lowpass';
-                    slot.filterNode.frequency.cancelScheduledValues(startTime);
-                    slot.filterNode.frequency.setValueAtTime(20000, startTime); // Start clear
-                    slot.filterNode.frequency.exponentialRampToValueAtTime(300, endTime); // End muffled
-                    
-                    // Schedule event-based cleanup after fade completes
-                    const cleanupFadedSlot = () => {
-                        slot.element.pause();
-                        slot.element.currentTime = 0;
-                        slot.isActive = false;
-                        slot.fadeType = null;
-                        slot.trackId = null;
-                        slot.lastUsedTime = Date.now();
-                        
-                        // Reset Web Audio nodes to default state for next use
-                        if (slot.gainNode && audioContext) {
-                            slot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
-                        }
-                        if (slot.filterNode && audioContext) {
-                            slot.filterNode.type = 'lowpass';
-                            slot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
-                        }
-                    };
-                    
-                    // Use Web Audio event timing for precise cleanup
-                    if (audioContext) {
-                        const cleanupTime = audioContext.currentTime + (transitionDuration / 1000) + 0.1;
-                        
-                        // Create a gain node just for timing
-                        const timingGain = audioContext.createGain();
-                        timingGain.connect(audioContext.destination);
-                        timingGain.gain.setValueAtTime(0, cleanupTime - 0.01);
-                        timingGain.gain.setValueAtTime(1, cleanupTime);
-                        
-                        // Listen for the timing event
-                        const checkCleanup = () => {
-                            if (audioContext!.currentTime >= cleanupTime) {
-                                cleanupFadedSlot();
-                                timingGain.disconnect();
-                                return;
-                            }
-                            requestAnimationFrame(checkCleanup);
-                        };
-                        requestAnimationFrame(checkCleanup);
-                    } else {
-                        // Fallback to timer if no audioContext
-                        setTimeout(cleanupFadedSlot, transitionDuration + 100);
-                    }
-                }
-            }
-            
-            // Step 6: Fade in new audio
+            // Step 6: Prepare new audio slot (but don't start crossfade yet)
             newSlot.isActive = true;
-            newSlot.fadeStartTime = startTime;
+            newSlot.fadeStartTime = 0; // Will be set when crossfade actually starts
             
+            // Set initial state for new audio (will be adjusted when crossfade starts)
             if (validCurrentSlots.length > 0) {
-                // Crossfade mode: fade in with highpass filter
+                // Crossfade mode: start with volume 0 and filters ready
                 newSlot.fadeType = 'in';
-                
-                // Set up highpass filter for fade in (start heavily filtered, become clear)
                 newSlot.filterNode.type = 'highpass';
-                newSlot.filterNode.frequency.cancelScheduledValues(startTime);
-                newSlot.filterNode.frequency.setValueAtTime(20000, startTime); // Start heavily filtered (thin sound)
-                newSlot.filterNode.frequency.exponentialRampToValueAtTime(20, endTime); // End minimally filtered (full sound)
-                
-                newSlot.gainNode.gain.cancelScheduledValues(startTime);
-                newSlot.gainNode.gain.setValueAtTime(0, startTime);
-                newSlot.gainNode.gain.linearRampToValueAtTime(1, endTime);
+                newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+                newSlot.gainNode.gain.setValueAtTime(0, audioContext.currentTime);
             } else {
-                // Direct play mode: no current audio to crossfade from
+                // Direct play mode: set up for immediate play
                 newSlot.fadeType = null;
-                
-                // Set up for direct play (no filter effects)
                 newSlot.filterNode.type = 'lowpass';
                 newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
                 newSlot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
             }
             
-            // Step 7: Start playback
+            // Step 7: Start playback and wait for actual audio output
             if (isPlaying) {
                 await newSlot.element.play();
+                
+                // Wait for actual audio output before starting synchronized crossfade
+                if (validCurrentSlots.length > 0) {
+                    waitForAudioOutput(newSlot, () => {
+                        // Now start synchronized fade-out and fade-in since audio is actually playing
+                        const currentTime = audioContext!.currentTime;
+                        const fadeEndTime = currentTime + (transitionDuration / 1000);
+                        
+                        console.log('Starting synchronized crossfade after audio output detected');
+                        
+                        // Start fade-out of old audio slots simultaneously
+                        for (const slot of validCurrentSlots) {
+                            if (slot.gainNode && slot.filterNode) {
+                                slot.fadeType = 'out';
+                                slot.fadeStartTime = currentTime;
+                                
+                                // Fade out volume and apply lowpass filter
+                                slot.gainNode.gain.cancelScheduledValues(currentTime);
+                                slot.gainNode.gain.setValueAtTime(1, currentTime);
+                                slot.gainNode.gain.linearRampToValueAtTime(0, fadeEndTime);
+                                
+                                // Set filter type to lowpass for proper fadeout
+                                slot.filterNode.type = 'lowpass';
+                                slot.filterNode.frequency.cancelScheduledValues(currentTime);
+                                slot.filterNode.frequency.setValueAtTime(20000, currentTime);
+                                slot.filterNode.frequency.exponentialRampToValueAtTime(300, fadeEndTime);
+                                
+                                // Schedule cleanup after fade completes
+                                const cleanupFadedSlot = () => {
+                                    slot.element.pause();
+                                    slot.element.currentTime = 0;
+                                    
+                                    // Wait for iOS to fully stop audio before resetting filters
+                                    setTimeout(() => {
+                                        if (slot.gainNode && audioContext) {
+                                            slot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+                                        }
+                                        if (slot.filterNode && audioContext) {
+                                            slot.filterNode.type = 'lowpass';
+                                            slot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
+                                        }
+                                        
+                                        slot.isActive = false;
+                                        slot.fadeType = null;
+                                        slot.trackId = null;
+                                        slot.lastUsedTime = Date.now();
+                                    }, 500);
+                                };
+                                
+                                // Use Web Audio timing for cleanup
+                                if (audioContext) {
+                                    const cleanupTime = audioContext.currentTime + (transitionDuration / 1000) + 0.5;
+                                    const timingGain = audioContext.createGain();
+                                    timingGain.connect(audioContext.destination);
+                                    timingGain.gain.setValueAtTime(0, cleanupTime - 0.01);
+                                    timingGain.gain.setValueAtTime(1, cleanupTime);
+                                    
+                                    const checkCleanup = () => {
+                                        if (audioContext!.currentTime >= cleanupTime) {
+                                            cleanupFadedSlot();
+                                            timingGain.disconnect();
+                                            return;
+                                        }
+                                        requestAnimationFrame(checkCleanup);
+                                    };
+                                    requestAnimationFrame(checkCleanup);
+                                } else {
+                                    setTimeout(cleanupFadedSlot, transitionDuration + 500);
+                                }
+                            }
+                        }
+                        
+                        // Start fade-in of new audio simultaneously
+                        newSlot.filterNode!.frequency.cancelScheduledValues(currentTime);
+                        newSlot.filterNode!.frequency.setValueAtTime(20000, currentTime);
+                        newSlot.filterNode!.frequency.exponentialRampToValueAtTime(20, fadeEndTime);
+                        
+                        newSlot.gainNode!.gain.cancelScheduledValues(currentTime);
+                        newSlot.gainNode!.gain.setValueAtTime(0, currentTime);
+                        newSlot.gainNode!.gain.linearRampToValueAtTime(1, fadeEndTime);
+                        
+                        // Update fade timing
+                        newSlot.fadeStartTime = currentTime;
+                    });
+                }
             }
             
             // Update current audio index
@@ -1245,39 +1319,93 @@
         return `${minutes}:${secs.toString().padStart(2, '0')}`;
     }
 
-    // Touch gesture handlers
-    // Simple horizontal swipe detection for seeking only
+    // Enhanced touch gesture handling with document-level delegation
     let touchStartX = 0;
+    let touchStartY = 0;
     let touchStartTime = 0;
+    let gestureInProgress = false;
     
-    function handleHorizontalSwipe(event: TouchEvent) {
-        if (event.touches.length === 1) {
-            touchStartX = event.touches[0].clientX;
-            touchStartTime = Date.now();
-        }
+    function isInteractiveElement(target: Element): boolean {
+        if (!target) return false;
+        
+        const tagName = target.tagName.toLowerCase();
+        const isInteractive = ['button', 'input', 'textarea', 'select', 'a'].includes(tagName);
+        const hasClickHandler = target.hasAttribute('onclick') || 
+                               target.hasAttribute('data-clickable') ||
+                               target.closest('button, a, [onclick], [data-clickable]');
+        
+        return isInteractive || !!hasClickHandler;
     }
     
-    function handleHorizontalSwipeEnd(event: TouchEvent) {
+    function handleDocumentTouchStart(event: TouchEvent) {
+        if (event.touches.length !== 1) return;
+        
+        const target = event.target as Element;
+        
+        // Skip gesture detection on interactive elements
+        if (isInteractiveElement(target)) {
+            gestureInProgress = false;
+            return;
+        }
+        
+        const touch = event.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        touchStartTime = Date.now();
+        gestureInProgress = true;
+    }
+    
+    function handleDocumentTouchEnd(event: TouchEvent) {
+        if (!gestureInProgress || event.changedTouches.length !== 1) {
+            gestureInProgress = false;
+            return;
+        }
+        
         const touch = event.changedTouches[0];
         const deltaX = touch.clientX - touchStartX;
+        const deltaY = touch.clientY - touchStartY;
         const timeDelta = Date.now() - touchStartTime;
         
-        // Only handle clear horizontal swipes for seeking
-        const minSwipeDistance = 80;
-        const maxSwipeTime = 300;
+        const minSwipeDistance = 50;
+        const maxSwipeTime = 500;
         
-        if (timeDelta < maxSwipeTime && Math.abs(deltaX) > minSwipeDistance) {
-            // Ensure it's primarily horizontal (not diagonal)
-            if (Math.abs(deltaX) > 50) {
-                if (deltaX > 0) {
-                    // Swipe right - seek forward
-                    seek(10);
-                } else {
-                    // Swipe left - seek backward
-                    seek(-10);
-                }
+        // Check if it's a valid gesture timing
+        if (timeDelta > maxSwipeTime) {
+            gestureInProgress = false;
+            return;
+        }
+        
+        // Calculate primary direction
+        const absX = Math.abs(deltaX);
+        const absY = Math.abs(deltaY);
+        
+        // Determine if this is primarily vertical or horizontal
+        if (absY > absX && absY > minSwipeDistance) {
+            // Vertical swipe - navigation
+            event.preventDefault();
+            if (deltaY > 0) {
+                goToPrevious(); // Swipe down
+            } else {
+                goToNext(); // Swipe up
+            }
+        } else if (absX > absY && absX > minSwipeDistance) {
+            // Horizontal swipe - seeking
+            event.preventDefault();
+            if (deltaX > 0) {
+                seek(10); // Swipe right
+            } else {
+                seek(-10); // Swipe left
+            }
+        } else if (absX < 20 && absY < 20 && timeDelta < 200) {
+            // Tap gesture - play/pause (only if not on an interactive element)
+            const target = event.target as Element;
+            if (!isInteractiveElement(target)) {
+                event.preventDefault();
+                togglePlay();
             }
         }
+        
+        gestureInProgress = false;
     }
 
     function handleWheel(event: WheelEvent) {
@@ -1289,30 +1417,14 @@
         }
     }
 
-    let touchStartY = 0;
-
-    function handleTouchStart(event: TouchEvent) {
-
-        touchStartY = event.touches[0].clientY;
-    }
-
-    function handleTouchEnd(event: TouchEvent) {
-        const touchEndY = event.changedTouches[0].clientY;
-        const deltaY = touchEndY - touchStartY;
-
-        if (deltaY > 10) { // Swipe down
-                event.preventDefault();
-            goToPrevious();
-        } else if (deltaY < -10) { // Swipe up
-                event.preventDefault();
-            goToNext();
-        }
-    }
-
     onMount(() => {
 
         if (browser) {
             document.addEventListener('keydown', handleKeydown);
+            
+            // Add document-level touch handlers for better coverage
+            document.addEventListener('touchstart', handleDocumentTouchStart, { passive: false });
+            document.addEventListener('touchend', handleDocumentTouchEnd, { passive: false });
         } else {
             console.error('❌ Browser detection failed - no keyboard events');
         }
@@ -1344,11 +1456,13 @@
     onDestroy(() => {
         if (browser) {
             document.removeEventListener('keydown', handleKeydown);
+            document.removeEventListener('touchstart', handleDocumentTouchStart);
+            document.removeEventListener('touchend', handleDocumentTouchEnd);
         }
     });
 </script>
 
-<div class="quickfeed-container" on:wheel={handleWheel} on:touchstart={handleTouchStart} on:touchend={handleTouchEnd}>
+<div class="quickfeed-container" on:wheel={handleWheel}>
     
     <div class="quickfeed-content">
         {#if audios[currentIndex]}
@@ -1361,11 +1475,7 @@
                 
                 <div class="content-overlay">
                     <!-- Audio Controls (Center) -->
-                    <div 
-                        class="audio-controls"
-                        on:touchstart={handleTouchStart}
-                        on:touchend={handleTouchEnd}
-                    >
+                    <div class="audio-controls">
                         <div class="waveform-container">
                             <div class="play-button" class:playing={isPlaying}>
                                 <button on:click={() => {togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
@@ -1425,7 +1535,7 @@
                             <button 
                                 class="action-btn favorite-btn" 
                                 class:favorited={audio.isFavorited}
-                                on:click={() => {scrollToIndex(index); toggleFavorite();}}
+                                on:click={() => {toggleFavorite();}}
                                 aria-label={audio.isFavorited ? "Remove from favorites" : "Add to favorites"}
                             >
                                 <svg width="32" height="32" viewBox="0 0 24 24" fill={audio.isFavorited ? "#ff6b6b" : "none"} stroke="white" stroke-width="2">
@@ -1437,7 +1547,7 @@
                         
                         <button 
                             class="action-btn comment-btn"
-                            on:click={() => openCommentsDialog(index)}
+                            on:click={() => openCommentsDialog(currentIndex)}
                             aria-label="Comments"
                         >
                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
