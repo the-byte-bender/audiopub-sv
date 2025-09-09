@@ -1101,6 +1101,16 @@
                 event.preventDefault();
                 decreaseMasterVolume();
                 break;
+            case 's':
+            case 'S':
+                if (browser) {
+                    if (navigator.share) {
+                        navigator.share({url: `/listen/${audio.id}`});
+                    } else if (navigator.clipboard) {
+                        navigator.clipboard.writeText(window.location.origin + `/listen/${audio.id}`);
+                    }
+                }
+                break;
             default:
                 console.log('🔘 Unhandled key:', event.key);
         }
@@ -1270,7 +1280,13 @@
         }
     }
 
-    
+    function handleWheel(event: WheelEvent) {
+        if (event.deltaY > 0) {
+            goToNext();
+        } else {
+            goToPrevious();
+        }
+    }
 
     onMount(() => {
 
@@ -1311,7 +1327,7 @@
     });
 </script>
 
-<div class="quickfeed-container">
+<div class="quickfeed-container" on:wheel={handleWheel}>
     
     <div class="quickfeed-content">
         {#if audios[currentIndex]}
@@ -1411,7 +1427,6 @@
                         <button 
                             class="action-btn share-btn"
                             on:click={() => {
-                                scrollToIndex(index); 
                                 if (browser) {
                                     if (navigator.share) {
                                         navigator.share({url: `/listen/${audio.id}`});
@@ -1551,7 +1566,7 @@
             <div class="hint">Space Play/Pause</div>
             <div class="hint">←→ Seek</div>
             <div class="hint">C Comments</div>
-            {#if currentUser}<div class="hint">L Like</div>{/if}
+            {#if currentUser}<div class="hint">F Favorite</div>{/if}
         </div>
         <div class="mobile-hints">
             <div class="hint">Swipe ↑↓ Navigate</div>
