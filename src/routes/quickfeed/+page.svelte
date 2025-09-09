@@ -36,7 +36,8 @@
 
     :global(main) {
         padding: 0;
-        height: 100vh;
+        /* Account for sticky header - use calc to subtract header height from viewport */
+        height: calc(100vh - 80px);
         overflow: hidden;
     }
 </style>

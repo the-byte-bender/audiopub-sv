@@ -174,6 +174,10 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     nav a {
@@ -205,6 +209,8 @@
 
     main {
         padding: 20px;
+        /* Account for sticky header - approximate height is 80px (40px padding + ~40px content) */
+        padding-top: calc(20px + 80px);
     }
 
     footer {
