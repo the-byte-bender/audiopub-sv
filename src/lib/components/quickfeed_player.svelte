@@ -1044,7 +1044,35 @@
     }
 
     function handleKeydown(event: KeyboardEvent) {
-
+        // Check if comments modal is open
+        const isModalOpen = commentsDialog?.open || false;
+        
+        // Check if user is currently typing in an input field
+        const isInputFocused = event.target instanceof HTMLInputElement || 
+                              event.target instanceof HTMLTextAreaElement ||
+                              (event.target as Element)?.tagName === 'INPUT' ||
+                              (event.target as Element)?.tagName === 'TEXTAREA';
+        
+        console.log('⌨️ KEY PRESSED:', event.key, 'Target:', event.target);
+        console.log('  - Current index:', currentIndex);
+        console.log('  - Audio pool length:', audioPool.length);
+        console.log('  - Browser:', browser);
+        console.log('  - Modal open:', isModalOpen);
+        console.log('  - Input focused:', isInputFocused);
+        
+        // Handle escape key for modal
+        if (event.key === 'Escape' && isModalOpen) {
+            console.log('🚪 Escape pressed - closing modal');
+            event.preventDefault();
+            closeCommentsDialog();
+            return;
+        }
+        
+        // Skip main page shortcuts when modal is open or user is typing in input
+        if (isModalOpen || isInputFocused) {
+            console.log('⏭️ Skipping shortcuts - modal open or input focused');
+            return;
+        }
         
         switch (event.key) {
             case 'ArrowUp':
@@ -1081,7 +1109,7 @@
                 }
                 break;
             default:
-                console.log('Unhandled key:', event.key);
+                console.log('🔘 Unhandled key:', event.key);
         }
     }
 
@@ -1184,6 +1212,7 @@
             console.error('Error toggling favorite:', error);
         }
     }
+
 
     function formatTime(seconds: number): string {
         if (!seconds || isNaN(seconds)) {
@@ -1468,7 +1497,7 @@
                     
                     {#if currentUser && !currentUser.isBanned}
                         <form 
-                            use:enhance={browser ? ({ formData }) => {
+                            use:enhance={browser ? ({ formData, formElement }) => {
                                 formData.append('audioId', currentAudio.id);
                                 return async ({ result, update }) => {
                                     if (result.type === 'success' && result.data?.comment) {
@@ -1478,6 +1507,9 @@
                                         }
                                         audios[currentIndex].comments = [...(audios[currentIndex].comments || []), result.data.comment];
                                         audios = audios; // Trigger reactivity
+                                        
+                                        // Clear the form
+                                        formElement.reset();
                                     }
                                     await update();
                                 };
