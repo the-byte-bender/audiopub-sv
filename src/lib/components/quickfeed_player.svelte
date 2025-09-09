@@ -1072,8 +1072,8 @@
                 event.preventDefault();
                 openCommentsDialog(currentIndex);
                 break;
-            case 'l':
-            case 'L':
+            case 'f':
+            case 'F':
                 const currentAudioElement = getCurrentAudioElement();
                 event.preventDefault();
                 if (currentUser) {
