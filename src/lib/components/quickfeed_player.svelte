@@ -50,6 +50,8 @@
     
     // Dynamic ring buffer audio system
     let audioContext: AudioContext | null = null;
+    let masterGainNode: GainNode | null = null;
+    let masterVolume = 1.0;
     
     // Dynamic pool configuration
     const MIN_POOL_SIZE = 2;
@@ -74,11 +76,6 @@
     let navigationHistory: number[] = [];
     let lastNavigationTime = 0;
     
-    // Touch gesture support
-    let touchStartY = 0;
-    let touchStartX = 0;
-    let touchStartTime = 0;
-    let isTouching = false;
 
     // Browser detection for SSR compatibility
     const browser = typeof window !== 'undefined';
@@ -210,10 +207,14 @@
             filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
             filterNode.Q.setValueAtTime(1, audioContext.currentTime);
 
-            // Connect the audio graph: source -> filter -> gain -> destination
+            // Connect the audio graph: source -> filter -> gain -> master gain -> destination
             source.connect(filterNode);
             filterNode.connect(gainNode);
-            gainNode.connect(audioContext.destination);
+            if (masterGainNode) {
+                gainNode.connect(masterGainNode);
+            } else {
+                gainNode.connect(audioContext.destination);
+            }
 
             // Store references
             audioSlot.source = source;
@@ -449,6 +450,13 @@
             } catch (error) {
                 return false;
             }
+        }
+
+        // Create master gain node if it doesn't exist
+        if (!masterGainNode && audioContext) {
+            masterGainNode = audioContext.createGain();
+            masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+            masterGainNode.connect(audioContext.destination);
         }
 
         return audioContext.state === 'running';
@@ -1033,13 +1041,25 @@
 
     function handleScroll() {
         if (!scrollContainer || !browser) return;
+        
         const scrollTop = scrollContainer.scrollTop;
         const itemHeight = window.innerHeight;
         const newIndex = Math.round(scrollTop / itemHeight);
         
+        // More responsive scroll handling
         if (newIndex !== currentIndex && newIndex >= 0 && newIndex < audios.length) {
+            const previousIndex = currentIndex;
             currentIndex = newIndex;
-            checkNearEnd(); // Check if we need to load more content
+            
+            // Load audio for new index with crossfade
+            if (audios[currentIndex]) {
+                loadAudio(true); // Use crossfade for smooth transitions
+            }
+            
+            // Check if we need to load more content
+            checkNearEnd();
+            
+            console.log(`📜 Scrolled from ${previousIndex} to ${currentIndex}`);
         }
     }
 
@@ -1107,6 +1127,16 @@
                 if (currentUser) {
                     toggleFavorite();
                 }
+                break;
+            case '=':
+            case '+':
+                event.preventDefault();
+                increaseMasterVolume();
+                break;
+            case '-':
+            case '_':
+                event.preventDefault();
+                decreaseMasterVolume();
                 break;
             default:
                 console.log('🔘 Unhandled key:', event.key);
@@ -1213,6 +1243,25 @@
         }
     }
 
+    function increaseMasterVolume() {
+        if (masterVolume < 1.0) {
+            masterVolume = Math.min(1.0, masterVolume + 0.1);
+            if (masterGainNode && audioContext) {
+                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+            }
+            console.log(`🔊 Volume increased to ${Math.round(masterVolume * 100)}%`);
+        }
+    }
+
+    function decreaseMasterVolume() {
+        if (masterVolume > 0.0) {
+            masterVolume = Math.max(0.0, masterVolume - 0.1);
+            if (masterGainNode && audioContext) {
+                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+            }
+            console.log(`🔉 Volume decreased to ${Math.round(masterVolume * 100)}%`);
+        }
+    }
 
     function formatTime(seconds: number): string {
         if (!seconds || isNaN(seconds)) {
@@ -1224,63 +1273,29 @@
     }
 
     // Touch gesture handlers
-    function handleTouchStart(event: TouchEvent) {
+    // Simple horizontal swipe detection for seeking only
+    let touchStartX = 0;
+    let touchStartTime = 0;
+    
+    function handleHorizontalSwipe(event: TouchEvent) {
         if (event.touches.length === 1) {
-            const touch = event.touches[0];
-            touchStartY = touch.clientY;
-            touchStartX = touch.clientX;
+            touchStartX = event.touches[0].clientX;
             touchStartTime = Date.now();
-            isTouching = true;
         }
     }
-
-    function handleTouchMove(event: TouchEvent) {
-        if (!isTouching || event.touches.length !== 1) return;
-        
-        // Prevent default scrolling behavior for our custom gestures
-        const touch = event.touches[0];
-        const deltaY = touch.clientY - touchStartY;
-        const deltaX = touch.clientX - touchStartX;
-        const timeDelta = Date.now() - touchStartTime;
-        
-        // If it's a clear vertical swipe gesture, prevent scroll
-        if (Math.abs(deltaY) > 50 && Math.abs(deltaX) < 100 && timeDelta < 300) {
-            event.preventDefault();
-        }
-    }
-
-    function handleTouchEnd(event: TouchEvent) {
-        if (!isTouching) return;
-        
+    
+    function handleHorizontalSwipeEnd(event: TouchEvent) {
         const touch = event.changedTouches[0];
-        const deltaY = touch.clientY - touchStartY;
         const deltaX = touch.clientX - touchStartX;
         const timeDelta = Date.now() - touchStartTime;
         
-        // Reset touch state
-        isTouching = false;
-        
-        // Minimum swipe distance and maximum time for gesture recognition
+        // Only handle clear horizontal swipes for seeking
         const minSwipeDistance = 80;
         const maxSwipeTime = 300;
         
-        if (timeDelta < maxSwipeTime) {
-            // Vertical swipe (navigate between audios)
-            if (Math.abs(deltaY) > minSwipeDistance && Math.abs(deltaX) < Math.abs(deltaY)) {
-                event.preventDefault();
-                if (deltaY < 0) {
-                    // Swipe up - next audio
-                    goToNext();
-                } else {
-                    // Swipe down - previous audio
-                    goToPrevious();
-                }
-                return;
-            }
-            
-            // Horizontal swipe (seek audio)
-            if (Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaY) < Math.abs(deltaX)) {
-                event.preventDefault();
+        if (timeDelta < maxSwipeTime && Math.abs(deltaX) > minSwipeDistance) {
+            // Ensure it's primarily horizontal (not diagonal)
+            if (Math.abs(deltaX) > 50) {
                 if (deltaX > 0) {
                     // Swipe right - seek forward
                     seek(10);
@@ -1288,13 +1303,7 @@
                     // Swipe left - seek backward
                     seek(-10);
                 }
-                return;
             }
-        }
-        
-        // Single tap to play/pause (if not a swipe gesture)
-        if (Math.abs(deltaY) < 20 && Math.abs(deltaX) < 20 && timeDelta < 200) {
-            togglePlay();
         }
     }
 
@@ -1345,9 +1354,6 @@
         class="scroll-container" 
         bind:this={scrollContainer} 
         on:scroll={handleScroll}
-        on:touchstart={handleTouchStart}
-        on:touchmove={handleTouchMove}
-        on:touchend={handleTouchEnd}
     >
         {#each audios as audio, index (audio.id)}
             <div class="audio-item" class:active={index === currentIndex}>
@@ -1357,7 +1363,11 @@
                 
                 <div class="content-overlay">
                     <!-- Audio Controls (Center) -->
-                    <div class="audio-controls">
+                    <div 
+                        class="audio-controls"
+                        on:touchstart={handleHorizontalSwipe}
+                        on:touchend={handleHorizontalSwipeEnd}
+                    >
                         <div class="waveform-container">
                             <div class="play-button" class:playing={isPlaying && index === currentIndex}>
                                 <button on:click={() => {togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
@@ -1618,8 +1628,12 @@
         height: 100%;
         overflow-y: auto;
         scroll-snap-type: y mandatory;
+        scroll-behavior: smooth;
         scrollbar-width: none;
         -ms-overflow-style: none;
+        /* Improve scroll performance */
+        will-change: scroll-position;
+        -webkit-overflow-scrolling: touch;
     }
 
     .scroll-container::-webkit-scrollbar {
@@ -1630,11 +1644,14 @@
         width: 100%;
         height: 100vh;
         scroll-snap-align: start;
+        scroll-snap-stop: always;
         position: relative;
         display: flex;
         align-items: center;
         justify-content: center;
         background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        /* Improve rendering performance */
+        transform: translateZ(0);
     }
 
     .audio-item:nth-child(even) {
@@ -2085,9 +2102,9 @@
         }
 
         .scroll-container {
-            /* Improve touch scrolling on mobile */
-            -webkit-overflow-scrolling: touch;
+            /* Optimize touch scrolling on mobile */
             touch-action: pan-y;
+            overscroll-behavior: contain;
         }
 
         .audio-item {
