@@ -1108,7 +1108,7 @@
         console.log('Loading more audios, page:', nextPage);
 
         try {
-            const response = await fetch(`/quickfeed?page=${nextPage}`);
+            const response = await fetch(`/quickfeed/api?page=${nextPage}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -1120,13 +1120,10 @@
                 audios = [...audios, ...data.audios];
                 currentPage = nextPage;
                 
-                // Check if we've reached the end
-                if (data.audios.length < 50 || !data.audios.length) {
-                    hasMoreContent = false;
-                    console.log('Reached end of content');
-                }
+                // Use hasMore field from API response for more reliable pagination
+                hasMoreContent = data.hasMore || false;
                 
-                console.log(`Successfully loaded ${data.audios.length} more audios. Total: ${audios.length}`);
+                console.log(`Successfully loaded ${data.audios.length} more audios. Total: ${audios.length}. Has more: ${hasMoreContent}`);
             } else {
                 hasMoreContent = false;
                 console.log('No more audios available');
