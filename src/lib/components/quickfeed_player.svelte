@@ -35,6 +35,7 @@
     let isBuffering = false;
     let commentsDialog: HTMLDialogElement;
     let statusAnnouncement: HTMLElement;
+    let isCommentsDialogOpen = false;
     
     // Play tracking variables
     let playStartTime = 0;
@@ -84,6 +85,15 @@
     
     // Track if audio listeners have been set up
     let audioListenersSetup = false;
+
+    // Keep dialog state synchronized with the actual dialog element
+    $: if (browser && commentsDialog) {
+        // Sync our reactive state with the actual dialog open state
+        const actuallyOpen = commentsDialog.open;
+        if (actuallyOpen !== isCommentsDialogOpen) {
+            isCommentsDialogOpen = actuallyOpen;
+        }
+    }
     
 
     function initializeAudioPool() {
@@ -988,14 +998,53 @@
 
     function openCommentsDialog(index: number) {
         // Use scroll-based navigation to avoid double crossfade
-        if (commentsDialog && browser) {
-            commentsDialog.showModal();
+        if (commentsDialog && browser && !isCommentsDialogOpen) {
+            try {
+                commentsDialog.showModal();
+                isCommentsDialogOpen = true;
+            } catch (error) {
+                console.error('Failed to open comments dialog:', error);
+            }
         }
     }
 
     function closeCommentsDialog() {
-        if (commentsDialog && browser) {
-            commentsDialog.close();
+        if (commentsDialog && browser && isCommentsDialogOpen) {
+            try {
+                commentsDialog.close();
+                isCommentsDialogOpen = false;
+            } catch (error) {
+                console.error('Failed to close comments dialog:', error);
+                // Fallback: force close by removing the open attribute
+                try {
+                    commentsDialog.removeAttribute('open');
+                    isCommentsDialogOpen = false;
+                } catch (fallbackError) {
+                    console.error('Fallback close also failed:', fallbackError);
+                }
+            }
+        }
+    }
+
+    function handleDialogClick(event: MouseEvent) {
+        // Close dialog when clicking on backdrop (outside content)
+        if (event.target === commentsDialog) {
+            closeCommentsDialog();
+        }
+    }
+
+    function handleDialogTouchStart(event: TouchEvent) {
+        // Prevent touch events inside dialog from bubbling to document handlers
+        // This stops the main app's swipe gestures from interfering with dialog interaction
+        if (event.target !== commentsDialog) {
+            event.stopPropagation();
+        }
+    }
+
+    function handleDialogTouchEnd(event: TouchEvent) {
+        // Prevent touch events inside dialog from bubbling to document handlers
+        if (event.target !== commentsDialog) {
+            event.stopPropagation();
         }
     }
 
@@ -1138,9 +1187,6 @@
 
 
     function handleKeydown(event: KeyboardEvent) {
-        // Check if comments modal is open
-        const isModalOpen = commentsDialog?.open || false;
-        
         // Check if user is currently typing in an input field
         const isInputFocused = event.target instanceof HTMLInputElement || 
                               event.target instanceof HTMLTextAreaElement ||
@@ -1151,19 +1197,20 @@
         console.log('  - Current index:', currentIndex);
         console.log('  - Audio pool length:', audioPool.length);
         console.log('  - Browser:', browser);
-        console.log('  - Modal open:', isModalOpen);
+        console.log('  - Modal open:', isCommentsDialogOpen);
         console.log('  - Input focused:', isInputFocused);
         
-        // Handle escape key for modal
-        if (event.key === 'Escape' && isModalOpen) {
+        // Handle escape key for modal - ALWAYS attempt to close if dialog is supposed to be open
+        if (event.key === 'Escape' && (isCommentsDialogOpen || commentsDialog?.open)) {
             console.log('🚪 Escape pressed - closing modal');
             event.preventDefault();
+            event.stopPropagation();
             closeCommentsDialog();
             return;
         }
         
         // Skip main page shortcuts when modal is open or user is typing in input
-        if (isModalOpen || isInputFocused) {
+        if (isCommentsDialogOpen || isInputFocused) {
             console.log('⏭️ Skipping shortcuts - modal open or input focused');
             return;
         }
@@ -1495,6 +1542,11 @@
             document.removeEventListener('keydown', handleKeydown);
             document.removeEventListener('touchstart', handleDocumentTouchStart);
             document.removeEventListener('touchend', handleDocumentTouchEnd);
+            
+            // Clean up dialog state
+            if (isCommentsDialogOpen && commentsDialog) {
+                closeCommentsDialog();
+            }
         }
     });
 </script>
@@ -1653,7 +1705,13 @@
         {/if}
     
     <!-- Comments Dialog -->
-    <dialog bind:this={commentsDialog} class="comments-dialog">
+    <dialog 
+        bind:this={commentsDialog} 
+        class="comments-dialog" 
+        on:click={handleDialogClick}
+        on:touchstart={handleDialogTouchStart}
+        on:touchend={handleDialogTouchEnd}
+    >
         {#if currentAudio}
             <div class="comments-header">
                 <h3>Comments</h3>
@@ -2112,6 +2170,15 @@
         border-radius: 1rem 1rem 0 0;
         display: flex;
         flex-direction: column;
+        /* Mobile improvements for better reliability */
+        -webkit-overflow-scrolling: touch;
+        overflow: hidden;
+        touch-action: pan-y; /* Allow vertical scrolling within dialog */
+        /* Prevent dialog from being affected by viewport changes on mobile */
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
     }
 
     .comments-dialog::backdrop {
