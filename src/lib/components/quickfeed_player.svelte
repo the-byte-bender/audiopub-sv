@@ -1008,9 +1008,17 @@
         }
     }
 
-    function closeCommentsDialog() {
+    function closeCommentsDialog(event?: Event) {
+        // Prevent event bubbling if this was called from a click event
+        if (event) {
+            console.log('🔥 Close button clicked, preventing event bubbling');
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
         if (commentsDialog && browser && isCommentsDialogOpen) {
             try {
+                console.log('🔥 Closing comments dialog');
                 commentsDialog.close();
                 isCommentsDialogOpen = false;
             } catch (error) {
@@ -1029,23 +1037,22 @@
     function handleDialogClick(event: MouseEvent) {
         // Close dialog when clicking on backdrop (outside content)
         if (event.target === commentsDialog) {
-            closeCommentsDialog();
+            console.log('🔥 Backdrop clicked, closing dialog');
+            closeCommentsDialog(event);
         }
     }
 
     function handleDialogTouchStart(event: TouchEvent) {
-        // Prevent touch events inside dialog from bubbling to document handlers
-        // This stops the main app's swipe gestures from interfering with dialog interaction
-        if (event.target !== commentsDialog) {
-            event.stopPropagation();
-        }
+        // Prevent ALL touch events within dialog from bubbling to document handlers
+        // This completely isolates dialog interactions from main app swipe gestures
+        console.log('🔥 Dialog touch start, stopping propagation');
+        event.stopPropagation();
     }
 
     function handleDialogTouchEnd(event: TouchEvent) {
-        // Prevent touch events inside dialog from bubbling to document handlers
-        if (event.target !== commentsDialog) {
-            event.stopPropagation();
-        }
+        // Prevent ALL touch events within dialog from bubbling to document handlers
+        console.log('🔥 Dialog touch end, stopping propagation');
+        event.stopPropagation();
     }
 
     function startPlayTracking() {
@@ -1412,17 +1419,32 @@
     function isInteractiveElement(target: Element): boolean {
         if (!target) return false;
         
+        // Check if element is inside the comments dialog
+        const isInsideDialog = target.closest('dialog');
+        if (isInsideDialog) {
+            console.log('🔥 Element inside dialog detected, skipping gesture detection');
+            return true;
+        }
+        
         const tagName = target.tagName.toLowerCase();
-        const isInteractive = ['button', 'input', 'textarea', 'select', 'a'].includes(tagName);
+        const isInteractive = ['button', 'input', 'textarea', 'select', 'a', 'dialog'].includes(tagName);
         const hasClickHandler = target.hasAttribute('onclick') || 
                                target.hasAttribute('data-clickable') ||
-                               target.closest('button, a, [onclick], [data-clickable]');
+                               target.hasAttribute('aria-label') ||  // Include elements with aria-label like close button
+                               target.closest('button, a, [onclick], [data-clickable], [aria-label]');
         
         return isInteractive || !!hasClickHandler;
     }
     
     function handleDocumentTouchStart(event: TouchEvent) {
         if (event.touches.length !== 1) return;
+        
+        // Skip ALL gesture detection when comments dialog is open
+        if (isCommentsDialogOpen) {
+            console.log('🔥 Dialog is open, skipping touch gesture detection');
+            gestureInProgress = false;
+            return;
+        }
         
         const target = event.target as Element;
         
@@ -1440,6 +1462,13 @@
     }
     
     function handleDocumentTouchEnd(event: TouchEvent) {
+        // Skip ALL touch end processing when comments dialog is open
+        if (isCommentsDialogOpen) {
+            console.log('🔥 Dialog is open, skipping touch end processing');
+            gestureInProgress = false;
+            return;
+        }
+        
         if (!gestureInProgress || event.changedTouches.length !== 1) {
             gestureInProgress = false;
             return;
@@ -2191,11 +2220,6 @@
         -webkit-overflow-scrolling: touch;
         overflow: hidden;
         touch-action: pan-y; /* Allow vertical scrolling within dialog */
-        /* Prevent dialog from being affected by viewport changes on mobile */
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
     }
 
     .comments-dialog::backdrop {
