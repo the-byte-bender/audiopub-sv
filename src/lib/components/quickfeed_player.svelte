@@ -1733,18 +1733,35 @@
                             use:enhance={browser ? ({ formData, formElement }) => {
                                 formData.append('audioId', currentAudio.id);
                                 return async ({ result, update }) => {
+                                    console.log('🔄 Comment form result:', result);
+                                    
+                                    // Let SvelteKit handle its updates first
+                                    await update();
+                                    
                                     if (result.type === 'success' && result.data?.comment) {
-                                        // Add the new comment to the local state
-                                        if (!currentAudio.comments) {
+                                        console.log('✅ Comment posted successfully:', result.data.comment);
+                                        
+                                        // Ensure comments array exists
+                                        if (!audios[currentIndex].comments) {
                                             audios[currentIndex].comments = [];
                                         }
-                                        audios[currentIndex].comments = [...(audios[currentIndex].comments || []), result.data.comment];
-                                        audios = audios; // Trigger reactivity
+                                        
+                                        // Add the new comment to local state with proper reactivity
+                                        audios[currentIndex] = {
+                                            ...audios[currentIndex],
+                                            comments: [...(audios[currentIndex].comments || []), result.data.comment]
+                                        };
+                                        
+                                        // Trigger reactivity explicitly
+                                        audios = [...audios];
+                                        
+                                        console.log('📝 Updated audio comments:', audios[currentIndex].comments?.length);
                                         
                                         // Clear the form
                                         formElement.reset();
+                                    } else if (result.type === 'failure') {
+                                        console.error('❌ Comment failed:', result.data?.message);
                                     }
-                                    await update();
                                 };
                             } : undefined}
                             action="/quickfeed?/add_comment" 
