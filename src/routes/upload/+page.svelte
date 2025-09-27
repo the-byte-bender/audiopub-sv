@@ -37,6 +37,7 @@
 
         const xhr = new XMLHttpRequest();
         xhr.open("POST", window.location.pathname);
+        xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
 
         xhr.upload.onprogress = (evt) => {
             if (evt.lengthComputable) {
@@ -45,20 +46,40 @@
         };
 
         xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
+            const status = xhr.status;
+            let body: any = null;
+            const ct = xhr.getResponseHeader("Content-Type") || "";
+            if (ct.includes("application/json")) {
+                try {
+                    body = JSON.parse(xhr.responseText || "null");
+                } catch {
+                }
+            }
+            if (status >= 200 && status < 300) {
                 progress = 100;
+                const redirectUrl = body?.redirect;
+                if (redirectUrl) {
+                    window.location.href = redirectUrl;
+                    return;
+                }
                 if (
                     xhr.responseURL &&
                     xhr.responseURL !== window.location.href
                 ) {
                     window.location.href = xhr.responseURL;
-                } else {
-                    form.reset();
-                    uploading = false;
+                    return;
                 }
+                form.reset();
+                uploading = false;
+            } else if (status >= 400 && status < 500) {
+                uploading = false;
+                error =
+                    body?.message ||
+                    body?.error ||
+                    `Upload failed (status ${status})`;
             } else {
                 uploading = false;
-                error = `Upload failed (status ${xhr.status})`;
+                error = `Server error (status ${status})`;
             }
         };
 
