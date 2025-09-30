@@ -18,7 +18,7 @@
  */
 import fs from "fs/promises";
 import path from "path";
-import { error, fail, redirect, json } from "@sveltejs/kit";
+import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import { Audio } from "$lib/server/database";
 import transcode from "$lib/server/transcode";
@@ -86,11 +86,6 @@ export const actions: Actions = {
             await audio.destroy();
             await fs.unlink(audio.path);
         });
-        const requestedWith = event.request.headers.get("x-requested-with");
-        const accept = event.request.headers.get("accept") || "";
-        if (requestedWith === "XMLHttpRequest" || accept.includes("application/json")) {
-            return json({ ok: true, redirect: `/listen/${audio.id}` }, { status: 201 });
-        }
         return redirect(303, `/listen/${audio.id}`);
     },
 };
