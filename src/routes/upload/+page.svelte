@@ -17,68 +17,25 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
+    import { enhance } from "$app/forms";
     import title from "$lib/title";
     import { onMount } from "svelte";
-
-    let uploading = false;
-    let progress = 0;
-    let error: string | null = null;
-
     onMount(() => title.set("Upload Audio"));
-
-    function handleSubmit(e: SubmitEvent) {
-        e.preventDefault();
-        if (uploading) return;
-        const form = e.currentTarget as HTMLFormElement;
-        const formData = new FormData(form);
-        uploading = true;
-        progress = 0;
-        error = null;
-
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", window.location.pathname);
-
-        xhr.upload.onprogress = (evt) => {
-            if (evt.lengthComputable) {
-                progress = Math.round((evt.loaded / evt.total) * 100);
-            }
-        };
-
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                progress = 100;
-                if (
-                    xhr.responseURL &&
-                    xhr.responseURL !== window.location.href
-                ) {
-                    window.location.href = xhr.responseURL;
-                } else {
-                    form.reset();
-                    uploading = false;
-                }
-            } else {
-                uploading = false;
-                error = `Upload failed (status ${xhr.status})`;
-            }
-        };
-
-        xhr.onerror = () => {
-            uploading = false;
-            error = "Network error during upload.";
-        };
-
-        xhr.send(formData);
-    }
+    let submitting = false;
 </script>
 
 <h1>Upload Audio</h1>
 
 <form
+    use:enhance={() => {
+        submitting = true;
+        return async ({ update }) => {
+            await update();
+            submitting = false;
+        };
+    }}
     method="POST"
     enctype="multipart/form-data"
-    on:submit|preventDefault={handleSubmit}
-    aria-describedby="upload-help"
-    novalidate
 >
     <div class="form-group">
         <label for="title">Title:</label>
@@ -121,39 +78,9 @@
         Please follow common decency and the law. Moderators and admins reserve
         the right to remove any content that is deemed inappropriate or illegal.
     </p>
-
-    {#if uploading}
-        <div
-            class="progress-wrapper"
-            role="progressbar"
-            aria-label="Upload progress"
-            aria-live="polite"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow={progress}
-        >
-            <div class="progress-bar" style={`width: ${progress}%;`}>
-                <span class="sr-only">{progress}%</span>
-            </div>
-        </div>
-    {/if}
-
-    {#if error}
-        <div class="error" role="alert" aria-live="assertive">{error}</div>
-    {/if}
-
-    <button
-        type="submit"
-        class="btn"
-        disabled={uploading}
-        aria-disabled={uploading}
+    <button type="submit" class="btn" disabled={submitting}
+        >{#if submitting}Uploading...{:else}Upload{/if}</button
     >
-        {#if uploading}
-            Uploading...
-        {:else}
-            Upload
-        {/if}
-    </button>
 </form>
 
 <style>
@@ -226,49 +153,8 @@
         background-color: #0056b3;
     }
 
-    .progress-wrapper {
-        width: 100%;
-        background: #e0e0e0;
-        border-radius: 4px;
-        height: 1rem;
-        overflow: hidden;
-        position: relative;
-        margin-bottom: 0.75rem;
-    }
-
-    .progress-bar {
-        height: 100%;
-        background: #007bff;
-        transition: width 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        font-size: 0.65rem;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-
-    .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0);
-        white-space: nowrap;
-        border: 0;
-    }
-
-    .error {
-        width: 100%;
-        margin-top: 0.5rem;
-        background: #ffe5e9;
-        color: #b00020;
-        padding: 0.75rem 1rem;
-        border-left: 4px solid #b00020;
-        border-radius: 4px;
-        font-size: 0.9rem;
+    .btn:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
     }
 </style>
