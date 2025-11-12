@@ -43,6 +43,7 @@
             id="email"
             name="email"
             required
+            autofocus
             class="form-control"
         />
     </div>

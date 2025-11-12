@@ -52,6 +52,7 @@
             minlength="8"
             maxlength="64"
             required
+            autofocus
         />
     </div>
     <button type="submit" class="btn">Reset password</button>

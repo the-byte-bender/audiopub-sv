@@ -49,6 +49,7 @@
             name="token"
             placeholder="Verification token"
             class="form-control"
+            autofocus
         />
     </div>
     <button type="submit" class="btn">Verify</button>
