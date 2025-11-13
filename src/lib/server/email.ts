@@ -16,7 +16,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import Mailgun from "mailgun-js";
+import Mailgun from "mailgun.js";
+import formData from "form-data";
 import * as dotenv from "dotenv";
 dotenv.config();
 
@@ -28,10 +29,17 @@ if (
   throw new Error("Please provide a mailgun API key and domain");
 }
 
-const mailgun = emailEnabled
-  ? new Mailgun({
-      apiKey: process.env.MAILGUN_API_KEY as string,
-      domain: process.env.MAILGUN_DOMAIN as string,
+type MailgunSendResult = {
+  id?: string;
+  message?: string;
+  status: number;
+  details?: string;
+};
+
+const mailgunClient = emailEnabled
+  ? new Mailgun(formData).client({
+      username: "api",
+      key: process.env.MAILGUN_API_KEY as string,
     })
   : null;
 
@@ -39,7 +47,7 @@ export default function sendEmail(
   to: string,
   subject: string,
   htmlContent: string
-): Promise<Mailgun.messages.SendResponse> {
+): Promise<MailgunSendResult> {
   const data = {
     from: `Audiopub <noreply@${process.env.MAILGUN_DOMAIN}>`,
     to: to,
@@ -48,7 +56,13 @@ export default function sendEmail(
   };
   if (!emailEnabled) {
     console.log("Email disabled, not sending email", data);
-    return Promise.resolve({} as Mailgun.messages.SendResponse);
+    return Promise.resolve({
+      status: 200,
+      message: "Email disabled",
+    });
   }
-  return mailgun!.messages().send(data);
+  return mailgunClient!.messages.create(
+    process.env.MAILGUN_DOMAIN as string,
+    data
+  );
 }
