@@ -39,6 +39,7 @@
       placeholder="Email"
       class="form-control"
       required
+      autofocus
     />
   </div>
   <button type="submit" class="btn">Send reset link</button>
