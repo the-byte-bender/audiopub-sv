@@ -27,3 +27,9 @@ declare global {
     }
   }
 }
+
+declare module "../build/handler.js" {
+  import type { RequestHandler } from "express";
+
+  export const handler: RequestHandler;
+}
