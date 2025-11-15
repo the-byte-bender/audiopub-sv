@@ -32,6 +32,7 @@ import {
   BelongsTo,
   CreatedAt,
   UpdatedAt,
+  HasMany,
 } from "sequelize-typescript";
 import Audio from "./audio";
 import User  from "./user";
@@ -68,6 +69,16 @@ export default class Comment extends Model {
 
   @BelongsTo(() => Audio)
   declare audio?: Audio;
+
+  @ForeignKey(() => Comment)
+  @Column(DataType.UUID)
+  declare parentId?: string;
+
+  @BelongsTo(() => Comment, { foreignKey: "parentId", as: "parent" })
+  declare parent?: Comment;
+
+  @HasMany(() => Comment, { foreignKey: "parentId", as: "replies" })
+  declare replies?: Comment[];
 
   toClientside(includeAudio: boolean = false): ClientsideComment {
     return {
