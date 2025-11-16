@@ -146,11 +146,14 @@ export const actions: Actions = {
         if (!user || !user.isVerified || user.isBanned) {
             return error(403, "Forbidden");
         }
+
         const audio = await Audio.findByPk(event.params.id);
         if (!audio) {
             return error(404, "Not found");
         }
+
         const form = await event.request.formData();
+        const parentId = form.get("parentId") as string | null;
         const comment = form.get("comment") as string;
         if (!comment) {
             return fail(400, { comment });
@@ -161,11 +164,15 @@ export const actions: Actions = {
                 message: "Comment must be between 3 and 4000 characters",
             });
         }
+
         const commentInDatabase = await Comment.create({
             userId: user.id,
             audioId: audio.id,
+            parentId,
             content: comment,
         });
+
+        // Send notifications to followers
         const followers = await AudioFollow.findAll({
             where: { audioId: audio.id } as any,
         });
@@ -183,7 +190,24 @@ export const actions: Actions = {
         if (payloads.length) {
             await Notification.bulkCreate(payloads as any);
         }
+        
         return { success: true };
+    },
+    reply_to_comment: async ({ request }) => {
+        const form = await request.formData();
+        const parentId = form.get("parentId") as string;
+        const parentComment = await Comment.findByPk(parentId, {
+            include: User,
+        });
+
+        console.log(`Replying to comment ID: ${parentId}`, parentComment?.toJSON());
+
+        if (!parentComment) {
+            return error(404, "The comment you are replying to was not found");
+        }
+        return {
+            replyTo:    parentComment.toClientside(false),
+        };
     },
     delete_comment: async (event) => {
         // Only an admin, or the user who made the comment can delete a comment

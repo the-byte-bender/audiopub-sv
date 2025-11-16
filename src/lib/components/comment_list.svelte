@@ -23,13 +23,14 @@
   export let comments: ClientsideComment[];
   export let user: ClientsideUser | undefined = undefined;
   export let isAdmin: boolean = false;
+  export let onReply: ((comment: ClientsideComment) => void) = comment => {};
 </script>
 
 <section role="group" aria-label="Comments">
   <h2>Comments</h2>
   {#if comments.length > 0}
     {#each comments as comment (comment.id)}
-      <Comment {comment} {user} {isAdmin} />
+      <Comment {comment} {user} {isAdmin} {onReply} />
     {/each}
   {:else}
     <p>No comments yet</p>
