@@ -29,6 +29,7 @@
   export let isAdmin: boolean = false;
   export let onReply: ((comment: ClientsideComment) => void) = comment => {};
   let isDeletionModalVisible: boolean = false;
+  let replyDisabled: boolean = false;
 
   $: commentDate = comment
     ? formatRelative(new Date(comment.createdAt), new Date())
@@ -49,13 +50,15 @@
   <div id="comment-actions">
     {#if user}
       <form method="post" action="?/reply_to_comment" use:enhance={() => {
+        replyDisabled = true;
         return async ({ update }) => {
             await update({ invalidateAll: false });
             onReply(comment);
+            replyDisabled = false;
         };
       }}>
         <input type="hidden" name="parentId" value={comment.id} />
-        <button type="submit">Reply</button>
+        <button type="submit" disabled={replyDisabled}>Reply</button>
       </form>
     {/if}
 
