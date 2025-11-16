@@ -164,7 +164,7 @@ commentField.focus();
             <label for="comment">Add a comment:</label>
             {/if}
             <textarea bind:this={commentField} name="comment" id="comment" required maxlength="4000"></textarea>
-            <button type="submit">Submit</button>
+            <button type="submit">{form?.replyTo ? 'Reply' : 'Comment'}</button>
         </form>
     {/if}
 </div>
