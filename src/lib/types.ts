@@ -49,6 +49,7 @@ export interface ClientsideComment {
     updatedAt: number;
     user: ClientsideUser;
     audio?: ClientsideAudio;
+    replies?: ClientsideComment[];
 }
 
 export enum NotificationType {
