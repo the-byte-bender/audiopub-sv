@@ -1,6 +1,6 @@
 /*
  * This file is part of the audiopub project.
- * 
+ *
  * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
@@ -32,10 +32,11 @@ import {
   BelongsTo,
   CreatedAt,
   UpdatedAt,
+  HasMany,
 } from "sequelize-typescript";
 import Audio from "./audio";
-import User  from "./user";
-import type { ClientsideComment, ClientsideAudio} from "$lib/types";
+import User from "./user";
+import type { ClientsideComment, ClientsideAudio } from "$lib/types";
 
 @Table
 export default class Comment extends Model {
@@ -69,7 +70,21 @@ export default class Comment extends Model {
   @BelongsTo(() => Audio)
   declare audio?: Audio;
 
-  toClientside(includeAudio: boolean = false): ClientsideComment {
+  @ForeignKey(() => Comment)
+  @Column(DataType.UUID)
+  declare parentId?: string;
+
+  @BelongsTo(() => Comment, { foreignKey: "parentId", as: "parent" })
+  declare parent?: Comment;
+
+  @HasMany(() => Comment, { foreignKey: "parentId", as: "replies" })
+  declare replies?: Comment[];
+
+  public countReplies!: () => Promise<number>;
+  toClientside(
+    includeAudio: boolean = false,
+    includeReplies: boolean = false
+  ): ClientsideComment {
     return {
       id: this.id,
       content: this.content,
@@ -77,6 +92,54 @@ export default class Comment extends Model {
       updatedAt: this.updatedAt.getTime(),
       user: this.user!.toClientside(),
       audio: includeAudio ? this.audio?.toClientside() : undefined,
+      replies: includeReplies
+        ? this.replies?.map((r) => r.toClientside(includeAudio, includeReplies))
+        : undefined,
     };
+  }
+
+  static constructThreads(flatList: Comment[]): Comment[] {
+    // Create an index for fast lookups of comments by ID
+    let index = new Map<string, Comment>();
+    // Populate the index
+    for (const comment of flatList) {
+      index.set(comment.id, comment);
+    }
+
+    // Now, build the tree structure
+    let roots: Comment[] = [];
+    for (const comment of flatList) {
+      if (!comment.parentId) {
+        // This is a root comment
+        roots.push(comment);
+        continue;
+      }
+
+      const parent = index.get(comment.parentId);
+      if (parent) {
+        if (!parent.replies) {
+          // Create a new replies array for this parent
+          parent.replies = [comment];
+        } else {
+          parent.replies.push(comment);
+        }
+      } else {
+        // Orphaned comment, no parent found
+        roots.push(comment);
+      }
+    }
+
+    // Recursively sort all comments by creation date
+    const recursiveSort = (comments: Comment[]) => {
+      comments.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      for (const comment of comments) {
+        if (comment.replies) {
+          recursiveSort(comment.replies);
+        }
+      }
+    };
+    recursiveSort(roots);
+
+    return roots;
   }
 }

@@ -24,6 +24,10 @@
     import CommentList from "$lib/components/comment_list.svelte";
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
+  import type { ClientsideComment } from "$lib/types.js";
+
+export let form: any;
+
     onMount(() => title.set(data.audio.title));
     const handlePlay = () => {
         fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" });
@@ -35,6 +39,11 @@
         if (count === 1) return "1 favorite";
         return `${count} favorites`;
     })();
+
+    let commentField: HTMLTextAreaElement;
+    function onReply(comment: ClientsideComment) {
+commentField.focus();
+    }
 </script>
 
 <h1>{data.audio.title}</h1>
@@ -131,12 +140,19 @@
             <button type="submit"> Permanently delete</button>
         </form>
     {/if}
-
+<section role="group" aria-label="Comments">
+  <h2>Comments</h2>
+  {#if data.comments.length > 0}
     <CommentList
         comments={data.comments}
         isAdmin={data.isAdmin}
         user={data.user}
+        {onReply}
     />
+    {:else}
+    <p>No comments yet</p>
+  {/if}
+</section>
 
     {#if data.user && !data.user.isBanned}
         {#if !data.user.isTrusted}
@@ -147,10 +163,14 @@
             </p>
         {/if}
         <form use:enhance action="?/add_comment" method="POST">
+            {#if form?.replyTo}
+            <input type="hidden" name="parentId" value={form.replyTo.id} />
+            <label for="comment">Reply to @{form.replyTo.user.name}:</label>
+            {:else}
             <label for="comment">Add a comment:</label>
-            <textarea name="comment" id="comment" required maxlength="4000"
-            ></textarea>
-            <button type="submit">Submit</button>
+            {/if}
+            <textarea bind:this={commentField} name="comment" id="comment" required maxlength="4000"></textarea>
+            <button type="submit">{form?.replyTo ? 'Reply' : 'Comment'}</button>
         </form>
     {/if}
 </div>
@@ -292,4 +312,23 @@
     .audio-details form button[type="submit"]:hover {
         background-color: #0056b3;
     }
+
+      section[role="group"] {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f9f9f9;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+  }
+
+  section[role="group"] h2 {
+    color: #333;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+    section[role="group"] p {
+    margin-top: 1rem;
+    color: #888;
+  }
 </style>

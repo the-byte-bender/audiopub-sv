@@ -23,36 +23,24 @@
   export let comments: ClientsideComment[];
   export let user: ClientsideUser | undefined = undefined;
   export let isAdmin: boolean = false;
+  export let onReply: ((comment: ClientsideComment) => void) = comment => {};
+  export let label: string = "comments";
 </script>
 
-<section role="group" aria-label="Comments">
-  <h2>Comments</h2>
-  {#if comments.length > 0}
+{#if comments.length > 0}
+<ul class="comments-list" aria-label={label}>
     {#each comments as comment (comment.id)}
-      <Comment {comment} {user} {isAdmin} />
+      <li><Comment {comment} {user} {isAdmin} {onReply} /></li>
     {/each}
-  {:else}
-    <p>No comments yet</p>
-  {/if}
-</section>
+</ul>
+{/if}
+
 
 <style>
-  section[role="group"] {
-    margin-top: 1rem;
-    padding: 1rem;
-    background-color: #f9f9f9;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-  }
+.comments-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin-left: 0;
+}
 
-  section[role="group"] h2 {
-    color: #333;
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-  }
-
-  section[role="group"] p {
-    margin-top: 1rem;
-    color: #888;
-  }
 </style>
