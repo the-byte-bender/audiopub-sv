@@ -23,6 +23,7 @@
   import { enhance } from "$app/forms";
   import SafeMarkdown from "./safe_markdown.svelte";
   import { updated } from "$app/state";
+  import CommentList from "./comment_list.svelte";
 
   export let comment: ClientsideComment;
   export let user: ClientsideUser | undefined = undefined;
@@ -79,6 +80,10 @@
     {/if}
   </div>
 </div>
+
+{#if comment.replies}
+<CommentList comments={comment.replies} {user} {isAdmin} {onReply} label="Replies" />
+{/if}
 
 <style>
   .comment {

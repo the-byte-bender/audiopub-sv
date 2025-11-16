@@ -140,13 +140,19 @@ commentField.focus();
             <button type="submit"> Permanently delete</button>
         </form>
     {/if}
-
+<section role="group" aria-label="Comments">
+  <h2>Comments</h2>
+  {#if data.comments.length > 0}
     <CommentList
         comments={data.comments}
         isAdmin={data.isAdmin}
         user={data.user}
         {onReply}
     />
+    {:else}
+    <p>No comments yet</p>
+  {/if}
+</section>
 
     {#if data.user && !data.user.isBanned}
         {#if !data.user.isTrusted}
@@ -306,4 +312,23 @@ commentField.focus();
     .audio-details form button[type="submit"]:hover {
         background-color: #0056b3;
     }
+
+      section[role="group"] {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f9f9f9;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+  }
+
+  section[role="group"] h2 {
+    color: #333;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+    section[role="group"] p {
+    margin-top: 1rem;
+    color: #888;
+  }
 </style>
