@@ -210,53 +210,39 @@ export const actions: Actions = {
     return {
       replyTo: parentComment.toClientside(false),
     };
-};
+  },
+  delete_comment: async (event) => {
+    // Only an admin, or the user who made the comment can delete a comment
+    const user = event.locals.user;
+    const form = await event.request.formData();
+    const commentId = form.get("id") as string;
+    if (!commentId) {
+      return fail(400);
+    }
 
-export const actions: Actions = {
-    delete: async (event) => {
-        const user = event.locals.user;
-        const audio = await Audio.findByPk(event.params.id, { include: User });
-        if (!audio) {
-            return error(404, "Not found");
-        }
-        if (!user || (!user.isAdmin && user.id !== audio.userId)) {
-            return error(403, "Forbidden");
-        }
-        await fs.unlink(audio.path);
-        await audio.destroy();
-        return redirect(303, "/");
-    },
-    add_comment: async (event) => {
-        const user = event.locals.user;
-        if (!user || !user.isVerified || user.isBanned) {
-            return error(403, "Forbidden");
-        }
+    const comment = await Comment.findByPk(commentId, { include: User });
+    if (!comment) {
+      return error(404, "Not found");
+    }
 
-        const audio = await Audio.findByPk(event.params.id);
-        if (!audio) {
-            return error(404, "Not found");
-        }
+    // You must be an admin or the comment owner to delete
+    if (!user || (!user.isAdmin && user.id !== comment.userId)) {
+      return error(403, "Forbidden");
+    }
 
-        const form = await event.request.formData();
-        const parentId = form.get("parentId") as string | null;
-        const comment = form.get("comment") as string;
-        if (!comment) {
-            return fail(400, { comment });
-        }
-        if (comment.length < 3 || comment.length > 4000) {
-            return fail(400, {
-                comment,
-                message: "Comment must be between 3 and 4000 characters",
-            });
-        }
+    // We should be able to use mixin methods here, but even after declaring their types
+    // explicitly, they just don't work.
+    const replyCount = await Comment.count({
+      where: { parentId: comment.id },
+    });
+    if (replyCount > 0) {
+      // Comment cannot be deleted, clear its content instead
+      comment.content = "[deleted]";
+      await comment.save();
+      return { success: true };
+    }
 
-        const commentInDatabase = await Comment.create({
-            userId: user.id,
-            audioId: audio.id,
-            parentId,
-            content: comment,
-        });
-
+    // Otherwise we can just delete it
     await comment.destroy();
     return { success: true };
   },
