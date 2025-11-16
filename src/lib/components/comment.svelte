@@ -72,7 +72,13 @@
         <pre>{comment.content}</pre>
         <button on:click={() => (isDeletionModalVisible = false)}>Cancel</button
         >
-        <form use:enhance action="?/delete_comment" method="post">
+        <form action="?/delete_comment" method="post"
+        use:enhance={() => {
+          return async ({ update }) => {
+            await update();
+            isDeletionModalVisible = false; // close modal after deletion
+          };
+        }}>
           <input type="hidden" name="id" value={comment.id} />
           <button type="submit">Confirm delete</button>
         </form>
