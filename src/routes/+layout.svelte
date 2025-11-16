@@ -135,7 +135,7 @@
             <a href="/register">Register</a>
         {/if}
     </nav>
-    <form use:enhance action="/search" method="get">
+    <form action="/search" method="get">
         <input type="text" name="q" placeholder="Search..." />
         <button type="submit">Search</button>
     </form>
