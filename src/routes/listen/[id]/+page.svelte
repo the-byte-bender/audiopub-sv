@@ -27,14 +27,20 @@
     import { dialog } from "$lib/stores/dialog";
     import AudioPlayer from "$lib/components/audio_player.svelte";
     import AudioActions from "$lib/components/audio_actions.svelte";
+    import { registerPlay } from "$lib/utils";
     import type { ClientsideComment } from "$lib/types.js";
 
 export let form: any;
 
     onMount(() => title.set(data.audio.title));
     
-    const handlePlay = () => {
-        fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" });
+    let hasRegisteredPlay = false;
+    const handleTimeUpdate = (e: CustomEvent<{currentTime: number, duration: number}>) => {
+        if (!hasRegisteredPlay) {
+            registerPlay(data.audio.id, e.detail.currentTime, e.detail.duration).then(success => {
+                if (success) hasRegisteredPlay = true;
+            });
+        }
     };
 
     let commentField: HTMLTextAreaElement;
@@ -69,7 +75,7 @@ commentField.focus();
     title={data.audio.title}
     downloadUrl={`/${data.audio.path}`}
     downloadFilename={data.audio.title + (data.audio.extension.startsWith(".") ? data.audio.extension : "." + data.audio.extension)}
-    on:play={handlePlay}
+    on:timeupdate={handleTimeUpdate}
 />
 
 <div class="audio-details">

@@ -67,3 +67,23 @@ export function announceToScreenReader(message: string, priority: 'polite' | 'as
 export function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
 }
+
+/**
+ * Try to register a play for an audio if it has been played for a sufficient duration.
+ */
+export async function registerPlay(audioId: string, currentTime: number, duration: number): Promise<boolean> {
+    // Only register if we've played at least 5 seconds or 50% of the audio
+    const minimumPlayTime = Math.min(5, duration * 0.5);
+    if (currentTime >= minimumPlayTime) {
+        try {
+            const response = await fetch(`/listen/${audioId}/try_register_play`, {
+                method: "POST"
+            });
+            return response.ok;
+        } catch (error) {
+            console.error('Play registration error:', error);
+            return false;
+        }
+    }
+    return false;
+}

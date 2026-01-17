@@ -205,9 +205,4 @@
     .bio-content {
         line-height: 1.6;
     }
-
-    .small-button {
-        padding: 0.4rem 0.8rem;
-        font-size: 0.9rem;
-    }
 </style>

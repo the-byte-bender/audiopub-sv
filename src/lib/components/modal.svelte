@@ -18,6 +18,9 @@
 -->
 <script lang="ts">
   export let visible: boolean;
+  export let labelledBy: string | undefined = undefined;
+  export let describedBy: string | undefined = undefined;
+
   let dialog: HTMLDialogElement;
   $: if (dialog) {
     if (visible) {
@@ -33,6 +36,8 @@
   bind:this={dialog}
   on:close={() => (visible = false)}
   on:click|self={() => dialog.close()}
+  aria-labelledby={labelledBy}
+  aria-describedby={describedBy}
 >
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div on:click|stopPropagation>

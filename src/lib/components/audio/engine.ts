@@ -163,6 +163,149 @@ export class HtmlAudioEngine implements AudioEngine {
 }
 
 /**
+ * Advanced Multi-track Pool Engine for Quickfeed.
+ * Handles preloading, crossfading, and Web Audio API integration.
+ */
+export interface PoolSlot {
+    element: HTMLAudioElement;
+    gainNode: GainNode | null;
+    filterNode: BiquadFilterNode | null;
+    source: MediaElementAudioSourceNode | null;
+    analyserNode: AnalyserNode | null;
+    isActive: boolean;
+    trackId: string | null;
+    fadeStartTime: number;
+    fadeType: 'in' | 'out' | null;
+    lastUsedTime: number;
+}
+
+export class PoolAudioEngine {
+    private audioContext: AudioContext | null = null;
+    private masterGainNode: GainNode | null = null;
+    private pool: PoolSlot[] = [];
+    private currentIndex = 0;
+    private volume = loadPersistedVolume();
+    
+    private maxPoolSize = 10;
+    private initialPoolSize = 3;
+
+    constructor() {
+        if (typeof window !== 'undefined') {
+            this.initializePool();
+        }
+    }
+
+    private initializePool() {
+        for (let i = 0; i < this.initialPoolSize; i++) {
+            this.addSlot();
+        }
+    }
+
+    private addSlot(): number {
+        if (this.pool.length >= this.maxPoolSize) return -1;
+
+        const element = new Audio();
+        element.preload = 'metadata';
+        element.crossOrigin = 'anonymous';
+        element.volume = this.masterGainNode ? 1 : this.volume;
+
+        const slot: PoolSlot = {
+            element,
+            gainNode: null,
+            filterNode: null,
+            source: null,
+            analyserNode: null,
+            isActive: false,
+            trackId: null,
+            fadeStartTime: 0,
+            fadeType: null,
+            lastUsedTime: Date.now()
+        };
+
+        this.pool.push(slot);
+        return this.pool.length - 1;
+    }
+
+    public ensureAudioContext(): AudioContext | null {
+        if (!this.audioContext && typeof window !== 'undefined') {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+                this.audioContext = new AudioContextClass();
+                this.masterGainNode = this.audioContext.createGain();
+                this.masterGainNode.gain.setValueAtTime(this.volume, this.audioContext.currentTime);
+                this.masterGainNode.connect(this.audioContext.destination);
+                
+                // Retroactively connect existing slots
+                for (const slot of this.pool) {
+                    this.createNodes(slot);
+                }
+            }
+        }
+        
+        if (this.audioContext?.state === 'suspended') {
+            this.audioContext.resume();
+        }
+        
+        return this.audioContext;
+    }
+
+    private createNodes(slot: PoolSlot) {
+        if (!this.audioContext || slot.source || !this.masterGainNode) return;
+
+        try {
+            const source = this.audioContext.createMediaElementSource(slot.element);
+            const analyserNode = this.audioContext.createAnalyser();
+            const gainNode = this.audioContext.createGain();
+            const filterNode = this.audioContext.createBiquadFilter();
+
+            analyserNode.fftSize = 256;
+            filterNode.type = 'lowpass';
+            filterNode.frequency.setValueAtTime(20000, this.audioContext.currentTime);
+
+            source.connect(analyserNode);
+            analyserNode.connect(filterNode);
+            filterNode.connect(gainNode);
+            gainNode.connect(this.masterGainNode);
+
+            slot.source = source;
+            slot.analyserNode = analyserNode;
+            slot.gainNode = gainNode;
+            slot.filterNode = filterNode;
+        } catch (e) {
+            console.error('Failed to create nodes:', e);
+        }
+    }
+
+    public getSlot(index: number): PoolSlot | undefined {
+        return this.pool[index];
+    }
+
+    public getPool(): PoolSlot[] {
+        return this.pool;
+    }
+
+    public setVolume(vol: number) {
+        this.volume = vol;
+        persistVolume(vol);
+        if (this.masterGainNode && this.audioContext) {
+            this.masterGainNode.gain.setTargetAtTime(vol, this.audioContext.currentTime, 0.05);
+        } else {
+            for (const slot of this.pool) {
+                slot.element.volume = vol;
+            }
+        }
+    }
+
+    public destroy() {
+        for (const slot of this.pool) {
+            slot.element.pause();
+            slot.element.src = '';
+        }
+        this.audioContext?.close();
+    }
+}
+
+/**
  * Volume persistence helper (shared between engines).
  */
 const VOLUME_STORAGE_KEY = 'audiopub_volume';

@@ -46,12 +46,16 @@ export default class PlaysTracker extends Model {
   declare id: number;
 
   @ForeignKey(() => User)
+  @AllowNull(false)
+  @Column(DataType.UUID)
   declare userId: string;
 
   @BelongsTo(() => User, { onDelete: "CASCADE" })
   declare user: User;
 
   @ForeignKey(() => Audio)
+  @AllowNull(false)
+  @Column(DataType.UUID)
   declare audioId: string;
 
   @BelongsTo(() => Audio, { onDelete: "CASCADE" })

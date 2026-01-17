@@ -20,13 +20,14 @@
     import type { ClientsideAudio, ClientsideUser, ClientsideComment } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
     import CommentList from "./comment_list.svelte";
+    import CommentDialog from "./comment_dialog.svelte";
     import PlayerShell from "./audio/player_shell.svelte";
-    import { loadPersistedVolume, persistVolume } from "./audio/engine";
+    import { loadPersistedVolume, persistVolume, PoolAudioEngine } from "./audio/engine";
     import AudioActions from "./audio_actions.svelte";
     import { onMount, onDestroy } from "svelte";
     import { enhance } from "$app/forms";
     import title from "$lib/title";
-    import { formatTime } from "$lib/utils";
+    import { formatTime, registerPlay } from "$lib/utils";
 
     export let audios: ClientsideAudio[];
     export let currentUser: ClientsideUser | null = null;
@@ -38,7 +39,6 @@
     let currentTime = 0;
     let duration = 0;
     let isBuffering = false;
-    let commentsDialog: HTMLDialogElement;
     let statusAnnouncement: HTMLElement;
     let isCommentsDialogOpen = false;
     
@@ -91,16 +91,6 @@
     
     // Track if audio listeners have been set up
     let audioListenersSetup = false;
-
-    // Keep dialog state synchronized with the actual dialog element
-    $: if (browser && commentsDialog) {
-        // Sync our reactive state with the actual dialog open state
-        const actuallyOpen = commentsDialog.open;
-        if (actuallyOpen !== isCommentsDialogOpen) {
-            isCommentsDialogOpen = actuallyOpen;
-        }
-    }
-    
 
     function initializeAudioPool() {
         if (!browser || audioPool.length > 0) return;
@@ -1122,63 +1112,12 @@
         console.log('Audio load() called, src:', audio.src);
     }
 
-    function openCommentsDialog(index: number) {
-        // Use scroll-based navigation to avoid double crossfade
-        if (commentsDialog && browser && !isCommentsDialogOpen) {
-            try {
-                commentsDialog.showModal();
-                isCommentsDialogOpen = true;
-            } catch (error) {
-                console.error('Failed to open comments dialog:', error);
-            }
-        }
+    function openCommentsDialog() {
+        isCommentsDialogOpen = true;
     }
 
-    function closeCommentsDialog(event?: Event) {
-        // Prevent event bubbling if this was called from a click event
-        if (event) {
-            console.log('🔥 Close button clicked, preventing event bubbling');
-            event.preventDefault();
-            event.stopPropagation();
-        }
-        
-        if (commentsDialog && browser && isCommentsDialogOpen) {
-            try {
-                console.log('🔥 Closing comments dialog');
-                commentsDialog.close();
-                isCommentsDialogOpen = false;
-            } catch (error) {
-                console.error('Failed to close comments dialog:', error);
-                // Fallback: force close by removing the open attribute
-                try {
-                    commentsDialog.removeAttribute('open');
-                    isCommentsDialogOpen = false;
-                } catch (fallbackError) {
-                    console.error('Fallback close also failed:', fallbackError);
-                }
-            }
-        }
-    }
-
-    function handleDialogClick(event: MouseEvent) {
-        // Close dialog when clicking on backdrop (outside content)
-        if (event.target === commentsDialog) {
-            console.log('🔥 Backdrop clicked, closing dialog');
-            closeCommentsDialog(event);
-        }
-    }
-
-    function handleDialogTouchStart(event: TouchEvent) {
-        // Prevent ALL touch events within dialog from bubbling to document handlers
-        // This completely isolates dialog interactions from main app swipe gestures
-        console.log('🔥 Dialog touch start, stopping propagation');
-        event.stopPropagation();
-    }
-
-    function handleDialogTouchEnd(event: TouchEvent) {
-        // Prevent ALL touch events within dialog from bubbling to document handlers
-        console.log('🔥 Dialog touch end, stopping propagation');
-        event.stopPropagation();
+    function closeCommentsDialog() {
+        isCommentsDialogOpen = false;
     }
 
     function startPlayTracking() {
@@ -1198,21 +1137,9 @@
     async function tryRegisterPlay() {
         if (!currentAudio || hasRegisteredPlay || !browser) return;
         
-        const playTime = Date.now() - playStartTime;
-        if (playTime >= 10000) { // 10 seconds
+        const success = await registerPlay(currentAudio.id, currentTime, duration);
+        if (success) {
             hasRegisteredPlay = true;
-            
-            try {
-                const response = await fetch(`/listen/${currentAudio.id}/try_register_play`, {
-                    method: 'POST'
-                });
-                if (response.ok) {
-                } else {
-                    console.warn('⚠️ Failed to register play');
-                }
-            } catch (error) {
-                console.error('❌ Error registering play:', error);
-            }
         }
     }
 
@@ -1338,8 +1265,8 @@
         console.log('  - Modal open:', isCommentsDialogOpen);
         console.log('  - Input focused:', isInputFocused);
         
-        // Handle escape key for modal - ALWAYS attempt to close if dialog is supposed to be open
-        if (event.key === 'Escape' && (isCommentsDialogOpen || commentsDialog?.open)) {
+        // Handle escape key for modal
+        if (event.key === 'Escape' && isCommentsDialogOpen) {
             console.log('🚪 Escape pressed - closing modal');
             event.preventDefault();
             event.stopPropagation();
@@ -1379,7 +1306,7 @@
             case 'c':
             case 'C':
                 event.preventDefault();
-                openCommentsDialog(currentIndex);
+                openCommentsDialog();
                 break;
             case 'f':
             case 'F':
@@ -1708,7 +1635,7 @@
             document.removeEventListener('touchend', handleDocumentTouchEnd);
             
             // Clean up dialog state
-            if (isCommentsDialogOpen && commentsDialog) {
+            if (isCommentsDialogOpen) {
                 closeCommentsDialog();
             }
         }
@@ -1779,7 +1706,7 @@
                         
                         <button 
                             class="action-btn comment-btn"
-                            on:click={() => openCommentsDialog(currentIndex)}
+                            on:click={() => openCommentsDialog()}
                             aria-label="Comments"
                         >
                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
@@ -1802,97 +1729,24 @@
             </div>
         {/if}
     
-    <!-- Comments Dialog -->
-    <dialog 
-        bind:this={commentsDialog} 
-        class="comments-dialog" 
-        on:click={handleDialogClick}
-        on:touchstart={handleDialogTouchStart}
-        on:touchend={handleDialogTouchEnd}
-    >
-        {#if currentAudio}
-            <div class="comments-header">
-                <h3>Comments</h3>
-                <button class="close-btn" on:click={closeCommentsDialog} aria-label="Close comments dialog">✕</button>
-            </div>
-                <div class="comments-content">
-                    {#if currentAudio.comments && currentAudio.comments.length > 0}
-                        <CommentList 
-                            comments={currentAudio.comments} 
-                            user={currentUser ?? undefined} 
-                            isAdmin={false}
-                        />
-                    {:else}
-                        <p class="no-comments">No comments yet. Be the first to comment!</p>
-                    {/if}
-                    
-                    {#if currentUser && !currentUser.isBanned}
-                        <form 
-                            use:enhance={browser ? ({ formData, formElement }) => {
-                                formData.append('audioId', currentAudio.id);
-                                return async ({ result, update }) => {
-                                    console.log('🔄 Comment form result:', result);
-                                    
-                                    // Let SvelteKit handle its updates first
-                                    await update();
-                                    
-                                    if (result.type === 'success' && result.data?.comment) {
-                                        const newComment = result.data.comment as ClientsideComment;
-                                        if (!newComment?.id) {
-                                            console.error('❌ Comment payload missing id');
-                                            return;
-                                        }
-                                        console.log('✅ Comment posted successfully:', newComment);
-                                        
-                                        // Ensure comments array exists
-                                        if (!audios[currentIndex].comments) {
-                                            audios[currentIndex].comments = [];
-                                        }
-                                        
-                                        // Add the new comment to local state with proper reactivity
-                                        audios[currentIndex] = {
-                                            ...audios[currentIndex],
-                                            comments: [...(audios[currentIndex].comments || []), newComment]
-                                        };
-                                        
-                                        // Trigger reactivity explicitly
-                                        audios = [...audios];
-                                        
-                                        console.log('📝 Updated audio comments:', audios[currentIndex].comments?.length);
-                                        
-                                        // Clear the form
-                                        formElement.reset();
-                                    } else if (result.type === 'failure') {
-                                        console.error('❌ Comment failed:', result.data?.message);
-                                    }
-                                };
-                            } : undefined}
-                            action="/quickfeed?/add_comment" 
-                            method="POST"
-                            class="comment-form"
-                        >
-                            {#if !currentUser.isTrusted}
-                                <p class="warning">
-                                    You're not trusted yet. Your comments will be reviewed before being shown.
-                                </p>
-                            {/if}
-                            <textarea 
-                                name="comment" 
-                                placeholder="Add a comment..." 
-                                required 
-                                maxlength="4000"
-                                rows="3"
-                            ></textarea>
-                            <button type="submit">Post Comment</button>
-                        </form>
-                    {:else if !currentUser}
-                        <p class="login-prompt">
-                            <a href="/login">Login</a> to comment
-                        </p>
-                    {/if}
-                </div>
-        {/if}
-    </dialog>
+<CommentDialog 
+        bind:visible={isCommentsDialogOpen}
+        audio={currentAudio}
+        user={currentUser}
+        on:commentAdded={(e) => {
+            const newComment = e.detail.comment;
+            if (audios[currentIndex]) {
+                if (!audios[currentIndex].comments) {
+                    audios[currentIndex].comments = [];
+                }
+                audios[currentIndex] = {
+                    ...audios[currentIndex],
+                    comments: [...(audios[currentIndex].comments || []), newComment]
+                };
+                audios = [...audios];
+            }
+        }}
+    />
     
     <!-- Status announcements for screen readers -->
     <div aria-live="polite" class="sr-only" bind:this={statusAnnouncement}></div>
@@ -2198,127 +2052,6 @@
     .action-btn:hover {
         background: rgba(255, 255, 255, 0.3);
         transform: scale(1.1);
-    }
-
-    .comments-dialog {
-        width: 100%;
-        max-width: 100vw;
-        height: 70vh;
-        margin: auto 0 0 0;
-        padding: 1.5rem;
-        background: white;
-        border: none;
-        border-radius: 1rem 1rem 0 0;
-        display: flex;
-        flex-direction: column;
-        /* Mobile improvements for better reliability */
-        -webkit-overflow-scrolling: touch;
-        overflow: hidden;
-        touch-action: pan-y; /* Allow vertical scrolling within dialog */
-    }
-
-    .comments-dialog::backdrop {
-        background: rgba(0, 0, 0, 0.8);
-    }
-
-    .comments-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 1rem;
-    }
-
-    .comments-header h3 {
-        margin: 0;
-        color: #333;
-    }
-
-    .close-btn {
-        background: none;
-        border: none;
-        font-size: 1.5rem;
-        cursor: pointer;
-        color: #666;
-    }
-
-    .comments-content {
-        flex: 1;
-        overflow-y: auto;
-        color: #333;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .no-comments {
-        text-align: center;
-        color: #666;
-        font-style: italic;
-        margin: 2rem 0;
-    }
-
-    .comment-form {
-        margin-top: auto;
-        padding-top: 1rem;
-        border-top: 1px solid #eee;
-    }
-
-    .comment-form .warning {
-        background: #fff3cd;
-        border: 1px solid #ffeaa7;
-        color: #856404;
-        padding: 0.5rem;
-        border-radius: 0.25rem;
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-    }
-
-    .comment-form textarea {
-        width: 100%;
-        border: 1px solid #ddd;
-        border-radius: 0.5rem;
-        padding: 0.75rem;
-        font-family: inherit;
-        font-size: 0.9rem;
-        resize: vertical;
-        margin-bottom: 0.5rem;
-    }
-
-    .comment-form textarea:focus {
-        outline: none;
-        border-color: #007bff;
-    }
-
-    .comment-form button {
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 0.5rem;
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-
-    .comment-form button:hover {
-        background: #0056b3;
-    }
-
-    .login-prompt {
-        text-align: center;
-        margin: 2rem 0;
-        color: #666;
-    }
-
-    .login-prompt a {
-        color: #007bff;
-        text-decoration: none;
-        font-weight: 600;
-    }
-
-    .login-prompt a:hover {
-        text-decoration: underline;
     }
 
     .control-hints {
