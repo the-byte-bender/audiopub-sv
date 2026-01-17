@@ -30,6 +30,7 @@ import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
 import { json, Op, Sequelize } from "sequelize";
 import { Json } from "sequelize/lib/utils";
+import { createCommentWithNotifications, validateCommentContent } from "$lib/server/interactions";
 
 export const load: PageServerLoad = async (event) => {
   // Query 1: Get audio with user
@@ -182,46 +183,23 @@ export const actions: Actions = {
       return fail(403, { comment, parentId, message: "You are banned" });
     }
 
-    const audio = await Audio.findByPk(event.params.id);
-    if (!audio) {
-      return fail(404, { comment, parentId, message: "Audio not found" });
+    const validation = validateCommentContent(comment);
+    if (!validation.valid) {
+      return fail(400, { comment, parentId, message: validation.error });
     }
 
-    if (!comment) {
-      return fail(400, { comment, parentId, message: "Comment is required" });
-    }
-    if (comment.length < 3 || comment.length > 4000) {
-      return fail(400, {
-        comment,
-        parentId,
-        message: "Comment must be between 3 and 4000 characters",
-      });
-    }
-
-    const commentInDatabase = await Comment.create({
-      userId: user.id,
-      audioId: audio.id,
-      parentId,
+    const result = await createCommentWithNotifications({
+      user,
+      audioId: event.params.id,
       content: comment,
+      parentId,
     });
 
-    // Send notifications to followers
-    const followers = await AudioFollow.findAll({
-      where: { audioId: audio.id } as any,
-    });
-    const followerIds = new Set<string>(followers.map((f) => f.userId));
-    if (audio.userId) followerIds.add(audio.userId);
-    followerIds.delete(user.id);
-    const payloads = Array.from(followerIds).map((uid) => ({
-      userId: uid,
-      actorId: user.id,
-      type: "comment" as const,
-      targetType: "comment" as const,
-      targetId: commentInDatabase.id,
-      metadata: { audioId: audio.id },
-    }));
-    if (payloads.length) {
-      await Notification.bulkCreate(payloads as any);
+    if (!result.success) {
+      if (result.error === "Audio not found") {
+        return fail(404, { comment, parentId, message: result.error });
+      }
+      return fail(500, { comment, parentId, message: result.error });
     }
 
     return { success: true };

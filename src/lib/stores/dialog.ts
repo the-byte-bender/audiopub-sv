@@ -30,7 +30,7 @@ export interface DialogOptions {
 
 export interface DialogState extends DialogOptions {
   id: string;
-  resolve?: (value: boolean | string | null) => void;
+  resolve?: (value?: boolean | string | null) => void;
 }
 
 function createDialogStore() {
@@ -49,9 +49,9 @@ function createDialogStore() {
           confirmText: 'Confirm',
           cancelText: 'Cancel',
           ...options,
-          resolve: (value: boolean | string | null) => {
+          resolve: (value?: boolean | string | null) => {
             set(null);
-            resolve(value as boolean);
+            resolve(value === true);
           }
         }));
       });
@@ -82,9 +82,9 @@ function createDialogStore() {
           confirmText: 'OK',
           cancelText: 'Cancel',
           ...options,
-          resolve: (value: boolean | string | null) => {
+          resolve: (value?: boolean | string | null) => {
             set(null);
-            resolve(value as string | null);
+            resolve((typeof value === 'string' ? value : null) as string | null);
           }
         }));
       });

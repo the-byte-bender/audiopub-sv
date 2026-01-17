@@ -20,17 +20,20 @@
     import type { ClientsideAudio, ClientsideUser, ClientsideComment } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
     import CommentList from "./comment_list.svelte";
-    import ProgressBar from "./audio/progress_bar.svelte";
+    import PlayerShell from "./audio/player_shell.svelte";
+    import { loadPersistedVolume, persistVolume } from "./audio/engine";
+    import AudioActions from "./audio_actions.svelte";
     import { onMount, onDestroy } from "svelte";
     import { enhance } from "$app/forms";
     import title from "$lib/title";
-    import { formatTime, announceToScreenReader } from "$lib/utils";
+    import { formatTime } from "$lib/utils";
 
     export let audios: ClientsideAudio[];
     export let currentUser: ClientsideUser | null = null;
 
     let currentIndex = 0;
     let isPlaying = false;
+    let hasEnded = false;
     let isTransitioning = false;
     let currentTime = 0;
     let duration = 0;
@@ -55,7 +58,8 @@
     // Dynamic ring buffer audio system
     let audioContext: AudioContext | null = null;
     let masterGainNode: GainNode | null = null;
-    let masterVolume = 0.7;
+    let masterVolume = loadPersistedVolume();
+    let previousMasterVolume = masterVolume;
     
     // Dynamic pool configuration
     const MIN_POOL_SIZE = 2;
@@ -119,6 +123,9 @@
         element.preload = 'metadata';
         element.crossOrigin = 'anonymous'; // For Web Audio API
         
+        // Initialize volume (use direct element volume if Web Audio isn't ready)
+        element.volume = masterGainNode ? 1 : masterVolume;
+        
         const slot = {
             element,
             gainNode: null,
@@ -147,6 +154,7 @@
             if (slot.isActive && slotIndex === currentAudioIndex) {
                 isPlaying = true;
                 isBuffering = false;
+                hasEnded = false;
                 startPlayTracking();
             }
         });
@@ -157,7 +165,7 @@
                 stopPlayTracking();
             }
         });
-        
+
         element.addEventListener('timeupdate', () => {
             if (slot.isActive && slotIndex === currentAudioIndex) {
                 const newCurrentTime = element.currentTime;
@@ -166,7 +174,7 @@
                     currentTime = newCurrentTime;
                     duration = newDuration;
                 }
-                
+
                 // Check if we should register a play
                 if (playStartTime > 0 && !hasRegisteredPlay) {
                     tryRegisterPlay();
@@ -203,6 +211,7 @@
         element.addEventListener('ended', () => {
             if (slot.isActive && slotIndex === currentAudioIndex) {
                 isPlaying = false;
+                hasEnded = true;
                 stopPlayTracking();
             }
         });
@@ -231,10 +240,13 @@
             source.connect(analyserNode);
             analyserNode.connect(filterNode);
             filterNode.connect(gainNode);
+            // Always connect through master gain (ensureAudioContext must be called first)
             if (masterGainNode) {
                 gainNode.connect(masterGainNode);
             } else {
+                // Fallback: connect to destination but flag for rewire
                 gainNode.connect(audioContext.destination);
+                console.warn('⚠️ Slot created before masterGainNode - will rewire');
             }
 
             // Store references
@@ -465,6 +477,47 @@
         seekToTime(e.detail);
     }
 
+    function setMasterVolume(next: number, announce: boolean = false) {
+        masterVolume = Math.max(0, Math.min(1, next));
+        if (masterVolume > 0) {
+            previousMasterVolume = masterVolume;
+        }
+        
+        // Persist to localStorage
+        persistVolume(masterVolume);
+
+        // If WebAudio isn't ready yet, apply volume directly to HTMLAudioElements.
+        // Once masterGainNode exists, keep element volume at 1 to avoid double attenuation.
+        const elementVolume = masterGainNode ? 1 : masterVolume;
+        for (const slot of audioPool) {
+            slot.element.volume = elementVolume;
+        }
+
+        if (masterGainNode && audioContext) {
+            masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+        }
+        // Note: volume announcements are handled by PlayerShell
+    }
+
+    function toggleMute() {
+        if (masterVolume === 0) {
+            setMasterVolume(previousMasterVolume || 0.7, true);
+        } else {
+            previousMasterVolume = masterVolume;
+            setMasterVolume(0, true);
+        }
+    }
+
+    // Keep the WebAudio master gain in sync with the UI slider
+    $: if (masterGainNode && audioContext) {
+        masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+    }
+
+    // Track last non-zero volume for mute/unmute
+    $: if (masterVolume > 0) {
+        previousMasterVolume = masterVolume;
+    }
+
     async function ensureAudioContext(): Promise<boolean> {
         if (!browser) return false;
         
@@ -491,6 +544,23 @@
             masterGainNode = audioContext.createGain();
             masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
             masterGainNode.connect(audioContext.destination);
+
+            // When WebAudio is active, keep element volume at 1 (gain nodes do the scaling)
+            for (const slot of audioPool) {
+                slot.element.volume = 1;
+            }
+
+            // Rewire any slots that were created before masterGainNode existed
+            for (const slot of audioPool) {
+                if (slot.gainNode) {
+                    try {
+                        slot.gainNode.disconnect();
+                        slot.gainNode.connect(masterGainNode);
+                    } catch {
+                        // ignore if not connected
+                    }
+                }
+            }
         }
 
         return audioContext.state === 'running';
@@ -637,18 +707,22 @@
             newSlot.fadeStartTime = 0; // Will be set when crossfade actually starts
             
             // Set initial state for new audio (will be adjusted when crossfade starts)
+            const ctx = audioContext;
+            if (!ctx) {
+                throw new Error('Audio context not initialized');
+            }
             if (validCurrentSlots.length > 0) {
                 // Crossfade mode: start with volume 0 and filters ready
                 newSlot.fadeType = 'in';
                 newSlot.filterNode.type = 'highpass';
-                newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
-                newSlot.gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                newSlot.filterNode.frequency.setValueAtTime(20000, ctx.currentTime);
+                newSlot.gainNode.gain.setValueAtTime(0, ctx.currentTime);
             } else {
                 // Direct play mode: set up for immediate play
                 newSlot.fadeType = null;
                 newSlot.filterNode.type = 'lowpass';
-                newSlot.filterNode.frequency.setValueAtTime(20000, audioContext.currentTime);
-                newSlot.gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+                newSlot.filterNode.frequency.setValueAtTime(20000, ctx.currentTime);
+                newSlot.gainNode.gain.setValueAtTime(1, ctx.currentTime);
             }
             
             // Step 7: Start playback and wait for actual audio output
@@ -805,13 +879,38 @@
             console.log('Load audio skipped - transition in progress');
             return;
         }
-        
-
 
         // Determine the audio source to use
         const audioSrc = currentAudio.transcodedPath ? 
             `/${currentAudio.transcodedPath}` : 
             `/${currentAudio.path}`;
+
+        // If this track is already being loaded or played in any slot, skip full reload
+        // unless crossfade is specifically requested to transition between slots.
+        const existingSlotIndex = audioPool.findIndex(s => s.trackId === currentAudio.id);
+        if (existingSlotIndex !== -1 && !useCrossfade) {
+            const slot = audioPool[existingSlotIndex];
+            
+            // If it was already active, sync UI state
+            if (slot.isActive) {
+                currentAudioIndex = existingSlotIndex;
+                duration = slot.element.duration || 0;
+                currentTime = slot.element.currentTime;
+            }
+            
+            // Ensure WebAudio upgrade if context now exists
+            if (audioContext && !slot.source) {
+                await ensureAudioContext();
+                createAudioNodes(slot);
+            }
+            
+            // If we want to be playing and it's not, try to play it
+            // (Only if it's ready enough, otherwise the activateSlotOnSuccess will handle it)
+            if (isPlaying && slot.element.paused && slot.element.readyState >= 2) {
+                slot.element.play().catch(() => {});
+            }
+            return;
+        }
 
         // Try ring buffer crossfade first
         if (useCrossfade && isPlaying) {
@@ -925,6 +1024,19 @@
             slot.isActive = true;
             currentAudioIndex = slotIndex;
             isBuffering = false;
+            
+            // Sync metadata immediately
+            if (audio.duration) {
+                duration = audio.duration;
+            }
+            currentTime = audio.currentTime;
+            
+            // If we're intended to be playing, start playback now that loading is successful
+            if (isPlaying) {
+                audio.play().catch(err => {
+                    console.log('Playback starting was blocked by browser:', err);
+                });
+            }
             
             // Ensure Web Audio nodes are created for crossfade capability
             if (!slot.source && audioContext) {
@@ -1136,20 +1248,25 @@
         
         const audio = getAudioElement();
 
-        // Ensure audio pool and Web Audio context are ready
-        if (audio.paused && audioPool.length === 0) {
-            initializeAudioPool();
+        // Ensure WebAudio is used for the first play.
+        // Note: the pool may already be initialized on mount, so don't rely on length===0.
+        const currentSlot = audioPool[currentAudioIndex];
+        const needsWebAudioInit = audio.paused && (!audioContext || !masterGainNode || !currentSlot?.source);
+        if (needsWebAudioInit) {
+            if (audioPool.length === 0) {
+                initializeAudioPool();
+            }
             const contextReady = await ensureAudioContext();
             if (!contextReady) {
                 console.error('❌ Failed to initialize audio context');
                 return;
             }
-            
-            // For first play, we need to load the audio properly through our system
-            // This ensures Web Audio nodes are connected
-            isPlaying = true; // Set playing state before loading
+
+            // For first play, load audio through our system so nodes are connected
+            isPlaying = true;
+            hasEnded = false;
             await loadAudio(false);
-            return; // loadAudio will handle the actual playback
+            return;
         }
         
         // Use actual audio state instead of component state for more reliability
@@ -1246,16 +1363,18 @@
                 goToNext();
                 break;
             case ' ':
+            case 'k':
+            case 'K':
                 event.preventDefault();
                 togglePlay();
                 break;
             case 'ArrowLeft':
                 event.preventDefault();
-                seek(-10);
+                seek(-(event.shiftKey ? 10 : 5));
                 break;
             case 'ArrowRight':
                 event.preventDefault();
-                seek(10);
+                seek(event.shiftKey ? 10 : 5);
                 break;
             case 'c':
             case 'C':
@@ -1270,23 +1389,42 @@
                     toggleFavorite();
                 }
                 break;
+            case 'm':
+            case 'M':
+                event.preventDefault();
+                toggleMute();
+                break;
+            case ']':
+            case '}':
+                event.preventDefault();
+                increaseMasterVolume(event.shiftKey ? 0.1 : 0.05);
+                break;
+            case '[':
+            case '{':
+                event.preventDefault();
+                decreaseMasterVolume(event.shiftKey ? 0.1 : 0.05);
+                break;
             case '=':
             case '+':
                 event.preventDefault();
-                increaseMasterVolume();
+                increaseMasterVolume(event.shiftKey ? 0.1 : 0.05);
                 break;
             case '-':
             case '_':
                 event.preventDefault();
-                decreaseMasterVolume();
+                decreaseMasterVolume(event.shiftKey ? 0.1 : 0.05);
                 break;
             case 's':
             case 'S':
+                event.preventDefault();
                 if (browser) {
-                    if (navigator.share) {
-                        navigator.share({url: `/listen/${audio.id}`});
-                    } else if (navigator.clipboard) {
-                        navigator.clipboard.writeText(window.location.origin + `/listen/${audio.id}`);
+                    const audioToShare = audios[currentIndex];
+                    if (audioToShare) {
+                        if (navigator.share) {
+                            navigator.share({ url: `/listen/${audioToShare.id}` });
+                        } else if (navigator.clipboard) {
+                            navigator.clipboard.writeText(window.location.origin + `/listen/${audioToShare.id}`);
+                        }
                     }
                 }
                 break;
@@ -1395,24 +1533,14 @@
         }
     }
 
-    function increaseMasterVolume() {
-        if (masterVolume < 1.0) {
-            masterVolume = Math.min(1.0, masterVolume + 0.1);
-            if (masterGainNode && audioContext) {
-                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
-            }
-            console.log(`🔊 Volume increased to ${Math.round(masterVolume * 100)}%`);
-        }
+    function increaseMasterVolume(step: number = 0.05) {
+        if (masterVolume >= 1.0) return;
+        setMasterVolume(masterVolume + step, true);
     }
 
-    function decreaseMasterVolume() {
-        if (masterVolume > 0.0) {
-            masterVolume = Math.max(0.0, masterVolume - 0.1);
-            if (masterGainNode && audioContext) {
-                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
-            }
-            console.log(`🔉 Volume decreased to ${Math.round(masterVolume * 100)}%`);
-        }
+    function decreaseMasterVolume(step: number = 0.05) {
+        if (masterVolume <= 0.0) return;
+        setMasterVolume(masterVolume - step, true);
     }
 
     // Enhanced touch gesture handling with document-level delegation
@@ -1538,6 +1666,8 @@
     onMount(() => {
 
         if (browser) {
+            // Note: volume is loaded by PlayerShell and applied via onVolumeChange callback
+            
             document.addEventListener('keydown', handleKeydown);
             
             // Add document-level touch handlers for better coverage
@@ -1597,56 +1727,25 @@
                 </div>
                 
                 <div class="content-overlay">
-                    <!-- Audio Controls (Center) -->
                     <div class="audio-controls">
                         <div class="waveform-container">
-                            <div class="navigation-controls">
-                                <!-- Previous Button -->
-                                <div class="nav-button previous-button">
-                                    <button on:click={() => {goToPrevious();}} aria-label="Previous audio">
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-                                            <polygon points="11,7 6,12 11,17" />
-                                            <polygon points="18,7 13,12 18,17" />
-                                        </svg>
-                                    </button>
-                                </div>
-                                
-                                <!-- Play/Pause Button -->
-                                <div class="play-button" class:playing={isPlaying}>
-                                    <button on:click={() => {togglePlay();}} aria-label={isPlaying ? "Pause" : "Play"}>
-                                        {#if isBuffering}
-                                            <div class="loading-spinner"></div>
-                                        {:else if isPlaying}
-                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
-                                                <rect x="6" y="4" width="4" height="16" />
-                                                <rect x="14" y="4" width="4" height="16" />
-                                            </svg>
-                                        {:else}
-                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
-                                                <polygon points="5,3 19,12 5,21" />
-                                            </svg>
-                                        {/if}
-                                    </button>
-                                </div>
-                                
-                                <!-- Next Button -->
-                                <div class="nav-button next-button">
-                                    <button on:click={() => {goToNext();}} aria-label="Next audio">
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-                                            <polygon points="13,7 18,12 13,17" />
-                                            <polygon points="6,7 11,12 6,17" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                                <ProgressBar 
-                                    {currentTime} 
-                                    {duration}
-                                    showTime={true}
-                                    variant="dark"
-                                    on:seek={handleSeek}
-                                />
+                            <PlayerShell
+                                title={audio.title}
+                                {isBuffering}
+                                {hasEnded}
+                                {currentTime}
+                                {duration}
+                                bind:volume={masterVolume}
+                                isPlaying={isPlaying}
+                                progressVariant="dark"
+                                volumeVariant="dark"
+                                downloadUrl={`/${audio.path}`}
+                                downloadFilename={audio.title + (audio.extension?.startsWith('.') ? audio.extension : '.' + audio.extension)}
+                                onTogglePlay={togglePlay}
+                                onSeek={(t) => seekToTime(t)}
+                                onVolumeChange={(v) => setMasterVolume(v)}
+                                disableArrowVolume={true}
+                            />
                         </div>
                     </div>
                     
@@ -1670,19 +1769,13 @@
                     
                     <!-- Action Buttons (Right Side) -->
                     <div class="action-buttons">
-                        {#if currentUser}
-                            <button 
-                                class="action-btn favorite-btn" 
-                                class:favorited={audio.isFavorited}
-                                on:click={() => {toggleFavorite();}}
-                                aria-label={audio.isFavorited ? "Remove from favorites" : "Add to favorites"}
-                            >
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill={audio.isFavorited ? "#ff6b6b" : "none"} stroke="white" stroke-width="2">
-                                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                                </svg>
-                                <span>{audio.favoriteCount || 0}</span>
-                            </button>
-                        {/if}
+                        <AudioActions 
+                            audio={audio}
+                            user={currentUser}
+                            variant="dark"
+                            showFavoriteCount={true}
+                            showShare={true}
+                        />
                         
                         <button 
                             class="action-btn comment-btn"
@@ -1691,28 +1784,6 @@
                         >
                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
                                 <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                            </svg>
-                        </button>
-                        
-                        <button 
-                            class="action-btn share-btn"
-                            on:click={() => {
-                                if (browser) {
-                                    if (navigator.share) {
-                                        navigator.share({url: `/listen/${audio.id}`});
-                                    } else if (navigator.clipboard) {
-                                        navigator.clipboard.writeText(window.location.origin + `/listen/${audio.id}`);
-                                    }
-                                }
-                            }}
-                            aria-label="Share"
-                        >
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                                <circle cx="18" cy="5" r="3"></circle>
-                                <circle cx="6" cy="12" r="3"></circle>
-                                <circle cx="18" cy="19" r="3"></circle>
-                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
                             </svg>
                         </button>
                     </div>
@@ -1748,7 +1819,7 @@
                     {#if currentAudio.comments && currentAudio.comments.length > 0}
                         <CommentList 
                             comments={currentAudio.comments} 
-                            user={currentUser} 
+                            user={currentUser ?? undefined} 
                             isAdmin={false}
                         />
                     {:else}
@@ -1766,7 +1837,12 @@
                                     await update();
                                     
                                     if (result.type === 'success' && result.data?.comment) {
-                                        console.log('✅ Comment posted successfully:', result.data.comment);
+                                        const newComment = result.data.comment as ClientsideComment;
+                                        if (!newComment?.id) {
+                                            console.error('❌ Comment payload missing id');
+                                            return;
+                                        }
+                                        console.log('✅ Comment posted successfully:', newComment);
                                         
                                         // Ensure comments array exists
                                         if (!audios[currentIndex].comments) {
@@ -1776,7 +1852,7 @@
                                         // Add the new comment to local state with proper reactivity
                                         audios[currentIndex] = {
                                             ...audios[currentIndex],
-                                            comments: [...(audios[currentIndex].comments || []), result.data.comment]
+                                            comments: [...(audios[currentIndex].comments || []), newComment]
                                         };
                                         
                                         // Trigger reactivity explicitly
@@ -1956,54 +2032,6 @@
         max-width: 90vw;
     }
 
-    .navigation-controls {
-        display: flex;
-        align-items: center;
-        gap: 1.5rem;
-    }
-
-    .play-button button {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        border: none;
-        background: rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(10px);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.3s ease;
-    }
-
-    .play-button button:hover {
-        background: rgba(255, 255, 255, 0.3);
-        transform: scale(1.1);
-    }
-
-    .nav-button button {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        border: none;
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(10px);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.3s ease;
-    }
-
-    .nav-button button:hover {
-        background: rgba(255, 255, 255, 0.25);
-        transform: scale(1.05);
-    }
-
-    .nav-button button:active {
-        transform: scale(0.95);
-    }
-
     .loading-spinner {
         width: 24px;
         height: 24px;
@@ -2172,14 +2200,6 @@
         transform: scale(1.1);
     }
 
-    .favorite-btn.favorited {
-        background: rgba(255, 107, 107, 0.3);
-    }
-
-    .action-btn span {
-        margin-top: 0.2rem;
-    }
-
     .comments-dialog {
         width: 100%;
         max-width: 100vw;
@@ -2338,10 +2358,6 @@
                 "controls actions"
                 "info actions";
             padding: 1rem;
-        }
-
-        .progress-bar {
-            width: 200px;
         }
 
         .content-info h2 {

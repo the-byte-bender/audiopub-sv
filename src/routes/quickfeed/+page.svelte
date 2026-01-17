@@ -47,9 +47,17 @@
     });
 </script>
 
+<h1>Quickfeed</h1>
 <QuickfeedPlayer bind:this={quickfeedPlayerRef} audios={data.audios} currentUser={data.user} />
 
 <style>
+    h1 {
+        font-size: 1.25rem;
+        margin: 0.5rem 1rem;
+        color: #333;
+        font-weight: 500;
+    }
+
     :global(body) {
         margin: 0;
         padding: 0;

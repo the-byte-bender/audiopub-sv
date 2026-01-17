@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+// @ts-expect-error build/handler.js is generated after `npm run build`
 import { handler } from "../build/handler.js";
 import express from "express";
 

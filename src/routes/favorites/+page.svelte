@@ -56,14 +56,4 @@
         font-size: 16px;
         line-height: 1.5;
     }
-
-    .empty-state a {
-        color: var(--text-link-color, #0066cc);
-        text-decoration: none;
-        font-weight: 500;
-    }
-
-    .empty-state a:hover {
-        text-decoration: underline;
-    }
 </style>

@@ -37,7 +37,7 @@
 <form use:enhance method="POST">
   {#if form?.message}
     <div
-      class={form.success !== false ? "success-message" : "error-message"}
+      class={form?.email ? "error-message" : "success-message"}
       role="alert"
     >
       {form.message}

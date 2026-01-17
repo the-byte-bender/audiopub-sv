@@ -84,11 +84,11 @@
 <div 
     class="volume-control"
     class:dark={variant === 'dark'}
-    on:keydown={handleKeyDown}
 >
     <button 
         class="mute-button"
         on:click={toggleMute}
+        on:keydown={handleKeyDown}
         aria-label={isMuted ? 'Unmute' : 'Mute'}
         title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
     >
@@ -119,6 +119,7 @@
         step="1"
         value={volumePercent}
         on:input={handleVolumeChange}
+        on:keydown={handleKeyDown}
         class="volume-slider"
         style="--volume-percent: {volumePercent}"
         aria-label="Volume"

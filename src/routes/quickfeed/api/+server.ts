@@ -16,11 +16,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, User, Comment } from "$lib/server/database";
-import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { RequestHandler } from "./$types";
-import { type OrderItem, Sequelize } from "sequelize";
-import { json, error } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
+import { getQuickfeedPage } from "$lib/server/quickfeed";
 
 export const GET: RequestHandler = async ({ url, locals }) => {
     try {
@@ -32,108 +30,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             return json({ error: "Invalid page parameter" }, { status: 400 });
         }
 
-        // Same logic as page.server.ts load function
-        const limit = 50; // Load more items for scrolling
-        const offset = (page - 1) * limit;
-
-        // Use random ordering for TikTok-like experience
-        const order: OrderItem[] = [Sequelize.fn('RAND')];
-
-        const audios = await Audio.findAndCountAll({
-            limit,
-            offset,
-            order,
-            include: {
-                model: User,
-                where: locals.user?.isAdmin ? {} : { isTrusted: true },
-            },
+        const result = await getQuickfeedPage({
+            page,
+            isAdmin: locals.user?.isAdmin || false,
+            currentUser: locals.user || null,
         });
-
-        const audioIds = audios.rows.map(audio => audio.id);
-        const currentUser = locals.user;
-        
-        let favoriteCounts = new Map<string, number>();
-        let userFavorites = new Set<string>();
-
-        if (audioIds.length > 0) {
-            try {
-                const [favoriteCountsData, userFavoritesData] = await Promise.all([
-                    // Get favorite counts for all audios in one query
-                    AudioFavorite.findAll({
-                        where: { audioId: audioIds },
-                        attributes: [
-                            'audioId',
-                            [Sequelize.fn('COUNT', Sequelize.col('id')), 'count']
-                        ],
-                        group: ['audioId']
-                    }),
-                    // Get current user's favorites in one query
-                    currentUser ? AudioFavorite.findAll({
-                        where: { 
-                            userId: currentUser.id,
-                            audioId: audioIds 
-                        },
-                        attributes: ['audioId']
-                    }) : Promise.resolve([])
-                ]);
-
-                // Process results into maps for easy lookup
-                favoriteCounts = new Map(
-                    favoriteCountsData.map(item => [
-                        item.audioId, 
-                        parseInt((item as any).get('count')) || 0
-                    ])
-                );
-                userFavorites = new Set(userFavoritesData.map(item => item.audioId));
-                
-            } catch (err) {
-                console.error('Error fetching favorite data:', err);
-                // Continue with empty data
-            }
-        }
-
-        // Get comments for all audios
-        const allComments = await Comment.findAll({
-            where: { 
-                audioId: audioIds 
-            },
-            include: {
-                model: User,
-                where: locals.user?.isAdmin ? {} : { isTrusted: true },
-            },
-            order: [["createdAt", "ASC"]],
-        });
-
-        // Group comments by audioId
-        const commentsByAudio = new Map<string, typeof allComments>();
-        allComments.forEach(comment => {
-            const audioId = (comment as any).audioId;
-            if (!commentsByAudio.has(audioId)) {
-                commentsByAudio.set(audioId, []);
-            }
-            commentsByAudio.get(audioId)?.push(comment);
-        });
-
-        // Process audios with clientside data
-        const processedAudios = audios.rows.map((audio) => {
-            const favoriteCount = favoriteCounts.get(audio.id) || 0;
-            const isFavorited = userFavorites.has(audio.id);
-            return {
-                ...audio.toClientside(true, favoriteCount, isFavorited),
-                comments: (commentsByAudio.get(audio.id) || []).map(comment => comment.toClientside())
-            };
-        });
-
-        const totalPages = Math.ceil(audios.count / limit);
-        const hasMore = page < totalPages;
 
         return json({
-            audios: processedAudios,
-            count: audios.count,
-            page,
-            limit,
-            totalPages,
-            hasMore
+            audios: result.audios,
+            count: result.count,
+            page: result.page,
+            limit: result.limit,
+            totalPages: result.totalPages,
+            hasMore: result.hasMore
         });
 
     } catch (err) {

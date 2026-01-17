@@ -124,14 +124,6 @@
     margin-left: 0.5em;
   }
 
-  .comment pre {
-    white-space: pre-wrap;
-    background-color: #fff;
-    padding: 0.5rem;
-    border: none;
-    margin-top: 0.5rem;
-  }
-
   .comment .comment-actions {
     margin-top: 0.5rem;
     display: flex;

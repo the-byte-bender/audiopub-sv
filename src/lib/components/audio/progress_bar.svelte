@@ -118,14 +118,14 @@
     aria-valuetext="{formatTime(currentTime)} of {formatTime(duration)}"
     tabindex="0"
     on:keydown={handleKeyDown}
+    on:mousedown={handleMouseDown}
+    on:touchstart|preventDefault={handleTouchStart}
+    on:touchmove|preventDefault={handleTouchMove}
+    on:touchend={handleTouchEnd}
 >
     <div 
         class="progress-track"
         bind:this={progressTrack}
-        on:mousedown={handleMouseDown}
-        on:touchstart|preventDefault={handleTouchStart}
-        on:touchmove|preventDefault={handleTouchMove}
-        on:touchend={handleTouchEnd}
     >
         <div 
             class="progress-fill" 
