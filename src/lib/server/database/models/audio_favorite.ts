@@ -150,7 +150,7 @@ export default class AudioFavorite extends Model {
         return !!favorite;
     }
 
-    static async getUserFavorites(userId: string, page: number = 1, limit: number = 30) {
+    static async getUserFavorites(userId: string, page: number = 1, limit: number = 30, isAdmin: boolean = false) {
         const offset = (page - 1) * limit;
         
         return AudioFavorite.findAndCountAll({
@@ -160,7 +160,18 @@ export default class AudioFavorite extends Model {
             include: [
                 {
                     model: Audio,
-                    include: [User],
+                    include: [
+                        {
+                            model: User,
+                            where: isAdmin ? {} : {
+                                [Op.or]: [
+                                    { isTrusted: true },
+                                    { id: userId } // Always show own audios even if not trusted
+                                ]
+                            }
+                        }
+                    ],
+                    required: true,
                 },
             ],
             order: [['createdAt', 'DESC']],

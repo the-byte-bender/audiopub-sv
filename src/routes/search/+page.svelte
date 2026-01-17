@@ -40,7 +40,6 @@
   {#if data.audios.length > 0}
     <AudioList 
       audios={data.audios} 
-      currentUser={data.user} 
       page={data.page} 
       totalPages={data.totalPages} 
       paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} 

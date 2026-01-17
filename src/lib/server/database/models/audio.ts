@@ -180,17 +180,4 @@ export default class Audio extends Model {
             user: includeUser ? this.user?.toClientside() : undefined,
         };
     }
-
-    static async search(query: string, page: number): Promise<Audio[]> {
-        return Audio.findAll({
-            where: Sequelize.literal(
-                `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`
-            ),
-            replacements: { query},
-            limit: 30,
-            offset: (page - 1) * 30,
-            include: User,
-            nest: true,
-        });
-    }
 }

@@ -101,7 +101,7 @@ export default class User extends Model {
   declare isBanned: boolean;
 
   @AllowNull(false)
-  @Default(true)
+  @Default(false)
   @Column(DataType.BOOLEAN)
   declare isTrusted: boolean;
 
@@ -268,9 +268,11 @@ export default class User extends Model {
   @BeforeCreate
   static async normalizeData(user: User) {
     user.email = user.email.toLowerCase();
-    user.displayName = user.name;
     user.name = user.name.toLowerCase();
-    user.isTrusted = false;
+    if (!user.displayName) {
+      user.displayName = user.name;
+    }
+    // Trust is handled by default value or explicit set in registration
   }
 
   @BeforeUpdate

@@ -36,7 +36,6 @@
     
     <AudioList
         audios={data.audios}
-        currentUser={data.user}
         page={data.page}
         totalPages={data.totalPages}
         groupThreshold={0}

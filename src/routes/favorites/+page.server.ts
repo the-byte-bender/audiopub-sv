@@ -33,7 +33,7 @@ export const load: PageServerLoad = async (event) => {
     const limit = 30;
 
     try {
-        const favorites = await AudioFavorite.getUserFavorites(user.id, page, limit);
+        const favorites = await AudioFavorite.getUserFavorites(user.id, page, limit, user.isAdmin);
         
         // Get favorite counts for each audio
         const audioIds = favorites.rows.map(fav => fav.audioId);

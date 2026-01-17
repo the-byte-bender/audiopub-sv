@@ -99,6 +99,5 @@
     audios={data.audios}
     page={data.page}
     totalPages={data.totalPages}
-    currentUser={data.user}
     paginationBaseUrl={`/?sort=${data.sortField}${data.sortField === "random" ? "" : "&order=" + data.sortOrder}`}
 />
