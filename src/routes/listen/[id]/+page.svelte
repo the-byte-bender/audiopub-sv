@@ -25,11 +25,13 @@
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import { dialog } from "$lib/stores/dialog";
-  import type { ClientsideComment } from "$lib/types.js";
+    import AudioPlayer from "$lib/components/audio_player.svelte";
+    import type { ClientsideComment } from "$lib/types.js";
 
 export let form: any;
 
     onMount(() => title.set(data.audio.title));
+    
     const handlePlay = () => {
         fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" });
     };
@@ -64,22 +66,16 @@ commentField.focus();
 
 <h1>{data.audio.title}</h1>
 
-<div class="audio-player">
-    <audio controls id="player" on:play={handlePlay} autofocus aria-label="Audio player for {data.audio.title}">
-        <source src="/{data.audio.path}" type={data.mimeType} />
-        <source src="/{data.audio.transcodedPath}" type="audio/aac" />
-        <p>Your browser doesn't support the audio element.</p>
-    </audio>
-    <a
-        href="/{data.audio.path}"
-        download={data.audio.title +
-            (data.audio.extension.startsWith(".")
-                ? data.audio.extension
-                : "." + data.audio.extension)}
-    >
-        Download
-    </a>
-</div>
+<AudioPlayer 
+    sources={[
+        { src: `/${data.audio.path}`, type: data.mimeType },
+        { src: `/${data.audio.transcodedPath}`, type: 'audio/aac' }
+    ]}
+    title={data.audio.title}
+    downloadUrl={`/${data.audio.path}`}
+    downloadFilename={data.audio.title + (data.audio.extension.startsWith(".") ? data.audio.extension : "." + data.audio.extension)}
+    on:play={handlePlay}
+/>
 
 <div class="audio-details">
     <div class="audio-stats">
@@ -183,27 +179,6 @@ commentField.focus();
         text-align: center;
         margin-bottom: 1rem;
         color: #333;
-    }
-
-    /* Styling for the audio player section */
-    .audio-player {
-        margin-bottom: 1rem;
-    }
-
-    /* Styling for the audio controls */
-    audio {
-        width: 100%;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Styling for the download link */
-    .audio-player a {
-        display: block;
-        text-align: center;
-        margin-top: 0.5rem;
-        color: #007bff;
-        text-decoration: none;
-        font-weight: bold;
     }
 
     /* Styling for the audio details section */

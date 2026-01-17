@@ -20,9 +20,11 @@
     import type { ClientsideAudio, ClientsideUser, ClientsideComment } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
     import CommentList from "./comment_list.svelte";
+    import ProgressBar from "./audio/progress_bar.svelte";
     import { onMount, onDestroy } from "svelte";
     import { enhance } from "$app/forms";
     import title from "$lib/title";
+    import { formatTime, announceToScreenReader } from "$lib/utils";
 
     export let audios: ClientsideAudio[];
     export let currentUser: ClientsideUser | null = null;
@@ -449,6 +451,18 @@
         }
         
         return audioPool[0].element;
+    }
+
+    function seekToTime(time: number) {
+        const audio = getCurrentAudioElement();
+        if (audio) {
+            audio.currentTime = Math.max(0, Math.min(time, audio.duration || 0));
+            currentTime = audio.currentTime;
+        }
+    }
+
+    function handleSeek(e: CustomEvent<number>) {
+        seekToTime(e.detail);
     }
 
     async function ensureAudioContext(): Promise<boolean> {
@@ -1401,15 +1415,6 @@
         }
     }
 
-    function formatTime(seconds: number): string {
-        if (!seconds || isNaN(seconds)) {
-            return '0:00';
-        }
-        const minutes = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${minutes}:${secs.toString().padStart(2, '0')}`;
-    }
-
     // Enhanced touch gesture handling with document-level delegation
     let touchStartX = 0;
     let touchStartY = 0;
@@ -1635,20 +1640,13 @@
                                 </div>
                             </div>
                             
-                                <div class="progress-bar">
-                                    <div class="progress-track">
-                                        <div 
-                                            class="progress-fill" 
-                                            style="width: {duration > 0 ? (currentTime / duration) * 100 : 0}%"
-                                            title="Progress: {currentTime.toFixed(1)}s / {duration.toFixed(1)}s ({duration > 0 ? ((currentTime / duration) * 100).toFixed(1) : 0}%)"
-                                        ></div>
-                                    </div>
-                                    <div class="time-display">
-                                        <span title="Current time: {currentTime}">{formatTime(currentTime)}</span>
-                                        <span title="Duration: {duration}">{formatTime(duration)}</span>
-                                    </div>
-
-                                </div>
+                                <ProgressBar 
+                                    {currentTime} 
+                                    {duration}
+                                    showTime={true}
+                                    variant="dark"
+                                    on:seek={handleSeek}
+                                />
                         </div>
                     </div>
                     
@@ -1953,6 +1951,11 @@
         gap: 2rem;
     }
 
+    .waveform-container :global(.progress-bar) {
+        width: 300px;
+        max-width: 90vw;
+    }
+
     .navigation-controls {
         display: flex;
         align-items: center;
@@ -2097,34 +2100,6 @@
         color: #ff6b6b;
         font-weight: bold;
         opacity: 1;
-    }
-
-    .progress-bar {
-        width: 300px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .progress-track {
-        width: 100%;
-        height: 4px;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 2px;
-        overflow: hidden;
-    }
-
-    .progress-fill {
-        height: 100%;
-        background: white;
-        transition: width 0.1s ease;
-    }
-
-    .time-display {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.9rem;
-        color: rgba(255, 255, 255, 0.8);
     }
 
     .content-info {
