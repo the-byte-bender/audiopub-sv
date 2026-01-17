@@ -84,7 +84,7 @@ commentField.focus();
     </div>
     {#if data.audio.user}
         <p>
-            Uploaded by: <a href="/user/{data.audio.user.id}"
+            Uploaded by: <a href="/@{data.audio.user.name}"
                 >{data.audio.user.name}</a
             >
         </p>

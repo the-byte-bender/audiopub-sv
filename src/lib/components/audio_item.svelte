@@ -43,7 +43,7 @@
     </h3>
     {#if audio.user}
         <p>
-            By <a href={`/user/${audio.user.id}`}>{audio.user.displayName}</a>
+            By <a href={`/@${audio.user.name}`}>{audio.user.displayName}</a>
         </p>
     {/if}
     <SafeMarkdown source={audio.description} />

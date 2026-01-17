@@ -60,7 +60,7 @@
     {#if notification.type === NotificationType.comment && notification.target}
         {@const comment = notification.target as ClientsideComment}
         <h3>
-            <a href={`/user/${notification.actor?.id}`}>
+            <a href={`/@${notification.actor?.name}`}>
                 {notification.actor?.displayName}
             </a>
             Commented on <a {href}>{comment.audio?.title}</a>
@@ -70,7 +70,7 @@
     {:else if notification.type === NotificationType.favorite && notification.target}
         {@const audio = notification.target}
         <h3>
-            <a href={`/user/${notification.actor?.id}`}>
+            <a href={`/@${notification.actor?.name}`}>
                 {notification.actor?.displayName}
             </a>
             favorited <a {href}>{(audio as any).title}</a>

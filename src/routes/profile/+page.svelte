@@ -31,6 +31,10 @@
 
 <h1>Your Profile</h1>
 
+<div class="profile-info">
+    <p>Public Profile: <a href={`/@${data.profileUser.name}`}>@{data.profileUser.name}</a></p>
+</div>
+
 <form use:enhance method="POST">
     {#if form?.message}
         <div class="error-message" role="alert">

@@ -1754,7 +1754,7 @@
                         <h2>{audio.title}</h2>
                         {#if audio.user}
                             <p class="author">
-                                <a href="/user/{audio.user.id}">@{audio.user.displayName}</a>
+                                <a href="/@{audio.user.name}">@{audio.user.name}</a>
                             </p>
                         {/if}
                         <div class="description">

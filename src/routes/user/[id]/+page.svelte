@@ -113,7 +113,7 @@
     groupThreshold={0}
     page={data.page}
     totalPages={data.totalPages}
-    paginationBaseUrl={`/user/${data.profileUser.id}`}
+    paginationBaseUrl={`/@${data.profileUser.name}`}
 />
 
 <style>
