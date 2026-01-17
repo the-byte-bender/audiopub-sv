@@ -17,24 +17,43 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-          import { formatRelative } from "date-fns";
-  import type { ClientsideComment, ClientsideUser } from "$lib/types";
-  import Modal from "./modal.svelte";
-  import { enhance } from "$app/forms";
-  import SafeMarkdown from "./safe_markdown.svelte";
-  import { updated } from "$app/state";
-  import CommentList from "./comment_list.svelte";
+    import { formatRelative } from "date-fns";
+    import type { ClientsideComment, ClientsideUser } from "$lib/types";
+    import { enhance } from "$app/forms";
+    import SafeMarkdown from "./safe_markdown.svelte";
+    import { dialog } from "$lib/stores/dialog";
+    import CommentList from "./comment_list.svelte";
 
-  export let comment: ClientsideComment;
-  export let user: ClientsideUser | undefined = undefined;
-  export let isAdmin: boolean = false;
-  export let onReply: ((comment: ClientsideComment) => void) = comment => {};
-  let isDeletionModalVisible: boolean = false;
-  let replyDisabled: boolean = false;
+    export let comment: ClientsideComment;
+    export let user: ClientsideUser | undefined = undefined;
+    export let isAdmin: boolean = false;
+    export let onReply: ((comment: ClientsideComment) => void) = comment => {};
+    let replyDisabled: boolean = false;
 
-  $: commentDate = comment
-    ? formatRelative(new Date(comment.createdAt), new Date())
-    : "";
+    $: commentDate = comment
+        ? formatRelative(new Date(comment.createdAt), new Date())
+        : "";
+
+    async function handleDeleteComment() {
+        const confirmed = await dialog.confirm({
+            title: "Delete comment?",
+            message: `Are you sure you want to delete this comment? This action cannot be undone.\n\nComment: "${comment.content.substring(0, 100)}${comment.content.length > 100 ? '...' : ''}"`,
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            danger: true
+        });
+
+        if (confirmed) {
+            const form = document.querySelector(`form[action="?/delete_comment"]`) as HTMLFormElement;
+            if (form) {
+                const input = form.querySelector('input[name="id"]') as HTMLInputElement;
+                if (input) {
+                    input.value = comment.id;
+                    form.submit();
+                }
+            }
+        }
+    }
 </script>
 
 <div class="comment">
@@ -64,25 +83,7 @@
     {/if}
 
     {#if isAdmin || (user && user.id === comment.user.id)}
-      <button on:click={() => (isDeletionModalVisible = true)}>Delete</button>
-      <Modal bind:visible={isDeletionModalVisible}>
-        <h2>Delete this comment?</h2>
-        <p>Are you sure? This action cannot be undone.</p>
-        <p>Comment content:</p>
-        <pre>{comment.content}</pre>
-        <button on:click={() => (isDeletionModalVisible = false)}>Cancel</button
-        >
-        <form action="?/delete_comment" method="post"
-        use:enhance={() => {
-          return async ({ update }) => {
-            await update();
-            isDeletionModalVisible = false; // close modal after deletion
-          };
-        }}>
-          <input type="hidden" name="id" value={comment.id} />
-          <button type="submit">Confirm delete</button>
-        </form>
-      </Modal>
+      <button on:click={handleDeleteComment}>Delete</button>
     {/if}
   </div>
 </div>

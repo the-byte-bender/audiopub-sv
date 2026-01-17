@@ -21,6 +21,7 @@
     import title from "$lib/title";
     import { onDestroy, onMount } from "svelte";
     import type { LayoutData } from "./$types";
+    import Dialog from "$lib/components/dialog.svelte";
 
     export let data: LayoutData;
 
@@ -102,6 +103,8 @@
         >{unreadCount > 0 ? `(${unreadCount}) ` : ""}{$title} | audiopub</title
     >
 </svelte>
+
+<Dialog />
 
 <a href="#main-content" class="skip-to-content">Skip to main content</a>
 

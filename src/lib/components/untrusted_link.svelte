@@ -17,7 +17,7 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import Modal from "./modal.svelte";
+    import { dialog } from "$lib/stores/dialog";
     export let href: string;
     export let title: string;
 
@@ -53,18 +53,21 @@
     }
 
     $: safeHref = sanitizeUrl(href);
-    let confirmVisible = false;
 
-    function confirmOpen(e: MouseEvent) {
+    async function handleClick(e: MouseEvent) {
         if (!safeHref) return;
         e.preventDefault();
-        confirmVisible = true;
-    }
+        
+        const confirmed = await dialog.confirm({
+            title: "Open external link?",
+            message: `You're about to open an external link:\n\n${safeHref}`,
+            confirmText: "Open",
+            cancelText: "Cancel"
+        });
 
-    function openLink() {
-        if (!safeHref) return;
-        window.open(safeHref, "_blank", "noopener,noreferrer");
-        confirmVisible = false;
+        if (confirmed && safeHref) {
+            window.open(safeHref, "_blank", "noopener,noreferrer");
+        }
     }
 </script>
 
@@ -74,28 +77,14 @@
         {title}
         target="_blank"
         rel="noopener noreferrer nofollow"
-        on:click|preventDefault={confirmOpen}
+        on:click={handleClick}
     >
         <slot />
     </a>
-    <Modal bind:visible={confirmVisible}>
-        <h2>Open link?</h2>
-        <p>You're about to open an external link:</p>
-        <p style="word-break: break-all"><strong>{safeHref}</strong></p>
-        <div
-            style="display: flex; gap: .5rem; margin-top: .75rem; flex-wrap: wrap;"
-        >
-            <button on:click={() => (confirmVisible = false)}>Cancel</button>
-            <button on:click={openLink}>Open</button>
-        </div>
-    </Modal>
 {/if}
 
 <style>
     a {
-        cursor: pointer;
-    }
-    button {
         cursor: pointer;
     }
 </style>

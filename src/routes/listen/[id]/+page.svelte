@@ -24,6 +24,7 @@
     import CommentList from "$lib/components/comment_list.svelte";
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
+    import { dialog } from "$lib/stores/dialog";
   import type { ClientsideComment } from "$lib/types.js";
 
 export let form: any;
@@ -43,6 +44,21 @@ export let form: any;
     let commentField: HTMLTextAreaElement;
     function onReply(comment: ClientsideComment) {
 commentField.focus();
+    }
+
+    async function handleDeleteAudio() {
+        const confirmed = await dialog.confirm({
+            title: "Delete audio?",
+            message: "Are you sure you want to permanently delete this audio? This action cannot be undone.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            danger: true
+        });
+
+        if (confirmed) {
+            const form = document.querySelector('form[action="?/delete"]') as HTMLFormElement;
+            form?.submit();
+        }
     }
 </script>
 
@@ -122,22 +138,8 @@ commentField.focus();
     {/if}
 
     {#if data.user && (data.isAdmin || data.user.id === data.audio.user?.id)}
-        <form
-            use:enhance={({
-                formElement,
-                formData,
-                action,
-                cancel,
-                submitter,
-            }) => {
-                if (!confirm("Are you sure you want to delete this audio?")) {
-                    cancel();
-                }
-            }}
-            action="?/delete"
-            method="POST"
-        >
-            <button type="submit"> Permanently delete</button>
+        <form action="?/delete" method="POST">
+            <button type="button" on:click={handleDeleteAudio}> Permanently delete</button>
         </form>
     {/if}
 <section role="group" aria-label="Comments">
