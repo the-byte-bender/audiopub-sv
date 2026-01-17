@@ -69,6 +69,7 @@ export enum NotificationType {
     upload = "upload",
     system = "system",
     favorite = "favorite",
+    mention = "mention",
 }
 
 export enum NotificationTargetType {

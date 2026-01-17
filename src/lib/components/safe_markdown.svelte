@@ -25,10 +25,14 @@
     import UntrustedLink from "./untrusted_link.svelte";
 
     export let source: string;
+
+    $: processedSource = source?.replace(/@([a-zA-Z0-9_]{3,24})/g, (match, username) => {
+        return `[@${username}](/@${username})`;
+    });
 </script>
 
 <SvelteMarkdown
-    {source}
+    source={processedSource}
     renderers={{
         ...excludeRenderersOnly(["heading", "image"]),
         html: buildUnsupportedHTML(),

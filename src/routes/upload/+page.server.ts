@@ -22,6 +22,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import { Audio } from "$lib/server/database";
 import transcode from "$lib/server/transcode";
+import { handleMentions } from "$lib/server/interactions";
 
 export const load: PageServerLoad = (event) => {
     const user = event.locals.user;
@@ -111,6 +112,12 @@ export const actions: Actions = {
             userId: user.id,
             extension: path.extname(file.name),
         });
+
+        // Handle mentions in description
+        if (description) {
+            await handleMentions(description, user.id, "audio", audio.id);
+        }
+
         await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
         transcode(audio.path).catch(async (err) => {
             console.error(err);

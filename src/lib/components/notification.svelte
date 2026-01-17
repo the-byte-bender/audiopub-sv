@@ -76,6 +76,24 @@
             favorited <a {href}>{(audio as any).title}</a>
             <span class="comment-date"> - {relativeTime}</span>
         </h3>
+    {:else if notification.type === NotificationType.mention && notification.target}
+        <h3>
+            <a href={`/@${notification.actor?.name}`}>
+                {notification.actor?.displayName}
+            </a>
+            mentioned you in 
+            {#if notification.targetType === "audio"}
+                an <a {href}>audio description</a>
+            {:else}
+                a <a {href}>comment</a>
+            {/if}
+            <span class="comment-date"> - {relativeTime}</span>
+        </h3>
+        {#if notification.targetType === "comment"}
+            <SafeMarkdown source={(notification.target as any).content} />
+        {:else}
+            <SafeMarkdown source={(notification.target as any).description} />
+        {/if}
     {:else if notification.type === NotificationType.system}
         <h3>
             {notification.metadata?.title || "System"}

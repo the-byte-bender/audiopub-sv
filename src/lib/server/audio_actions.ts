@@ -18,6 +18,7 @@
  */
 import { Audio, AudioEditHistory } from "$lib/server/database";
 import type User from "$lib/server/database/models/user";
+import { handleMentions } from "./interactions";
 
 export interface EditAudioOptions {
     user: User;
@@ -76,6 +77,11 @@ export async function editAudio(options: EditAudioOptions): Promise<EditAudioRes
             audio.editCount = (audio.editCount ?? 0) + 1;
         }
         await audio.save();
+
+        // Handle mentions in new description
+        if (description) {
+            await handleMentions(description, user.id, "audio", audio.id);
+        }
 
         return { success: true };
     } catch (err) {

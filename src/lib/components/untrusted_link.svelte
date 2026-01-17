@@ -28,6 +28,11 @@
             let cleanUrl = url.trim();
             const lowerUrl = cleanUrl.toLowerCase();
 
+            // Allow internal links
+            if (cleanUrl.startsWith("/")) {
+                return cleanUrl;
+            }
+
             if (!trustedSchemas.some((schema) => lowerUrl.startsWith(schema))) {
                 if (cleanUrl.includes(".") && !cleanUrl.startsWith("/")) {
                     cleanUrl = `https://${cleanUrl}`;
@@ -56,6 +61,12 @@
 
     async function handleClick(e: MouseEvent) {
         if (!safeHref) return;
+        
+        // Don't show dialog for internal links
+        if (safeHref.startsWith("/")) {
+            return;
+        }
+
         e.preventDefault();
         
         const confirmed = await dialog.confirm({
@@ -75,8 +86,8 @@
     <a
         href={safeHref}
         {title}
-        target="_blank"
-        rel="noopener noreferrer nofollow"
+        target={safeHref.startsWith("/") ? "_self" : "_blank"}
+        rel={safeHref.startsWith("/") ? "" : "noopener noreferrer nofollow"}
         on:click={handleClick}
     >
         <slot />
