@@ -28,11 +28,25 @@ export const load: PageServerLoad = async (event) => {
   const pageString = event.url.searchParams.get("page") as string;
   const page = pageString ? parseInt(pageString) : 1;
   query = query?.trim();
-  if (!query || query.length < 3) {
-    return error(400, "Query must be at least 3 characters long");
+  if (!query) {
+    return {
+      audios: [],
+      query: "",
+      page: 1,
+      totalPages: 0,
+    };
+  }
+  if (query.length < 3) {
+    return {
+      audios: [],
+      query,
+      page: 1,
+      totalPages: 0,
+      message: "Query must be at least 3 characters long",
+    };
   }
   // Query 1: Get audios with users (standard search query)
-  const audios = await Audio.findAll({
+  const { rows: audios, count } = await Audio.findAndCountAll({
     where: Sequelize.literal(
       `MATCH(title, description) AGAINST(:query IN NATURAL LANGUAGE MODE)`
     ),
@@ -98,5 +112,6 @@ export const load: PageServerLoad = async (event) => {
     }),
     query,
     page,
+    totalPages: Math.ceil(count / 30),
   };
 };

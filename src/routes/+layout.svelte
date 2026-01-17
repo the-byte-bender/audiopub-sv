@@ -141,7 +141,13 @@
         {/if}
     </nav>
     <form action="/search" method="get" role="search">
-        <input type="text" name="q" placeholder="Search..." />
+        <input
+            type="text"
+            name="q"
+            placeholder="Search..."
+            minlength="3"
+            required
+        />
         <button type="submit">Search</button>
     </form>
 </header>

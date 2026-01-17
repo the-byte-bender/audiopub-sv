@@ -21,16 +21,61 @@
   import AudioList from "$lib/components/audio_list.svelte";
   import title from "$lib/title";
   import { onMount } from "svelte";
-  onMount(() => title.set(`Search results for: ${data.query}`));
+  onMount(() => {
+    if (data.message) {
+      title.set("Search");
+    } else {
+      title.set(data.query ? `Search results for: ${data.query}` : "Search");
+    }
+  });
 </script>
-<h1>Search results for: {data.query}</h1>
 
-<AudioList audios={data.audios} currentUser={data.user} page={data.page} totalPages={0} paginationBaseUrl={`/search`} />
+{#if data.message}
+  <h1>Search</h1>
+  <div class="error-message" role="alert">
+    {data.message}
+  </div>
+{:else if data.query}
+  <h1>Search results for: {data.query}</h1>
+  {#if data.audios.length > 0}
+    <AudioList 
+      audios={data.audios} 
+      currentUser={data.user} 
+      page={data.page} 
+      totalPages={data.totalPages} 
+      paginationBaseUrl={`/search?q=${encodeURIComponent(data.query)}`} 
+    />
+  {:else}
+    <p class="no-results">No results found for "{data.query}".</p>
+  {/if}
+{:else}
+  <h1>Search</h1>
+  <p class="info">Enter a query to search for audio.</p>
+{/if}
 
 <style>
   h1 {
     text-align: center;
     margin-bottom: 1rem;
     color: #333;
+  }
+  .error-message {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
+  .no-results, .info {
+    text-align: center;
+    margin-top: 2rem;
+    color: #666;
+    font-style: italic;
   }
 </style>
