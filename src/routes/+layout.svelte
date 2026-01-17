@@ -103,8 +103,10 @@
     >
 </svelte>
 
+<a href="#main-content" class="skip-to-content">Skip to main content</a>
+
 <header>
-    <nav>
+    <nav aria-label="Main navigation">
         <a href="/">Home</a>
         <a href="/quickfeed">Quickfeed</a>
         {#if data.user}
@@ -135,12 +137,12 @@
             <a href="/register">Register</a>
         {/if}
     </nav>
-    <form action="/search" method="get">
+    <form action="/search" method="get" role="search">
         <input type="text" name="q" placeholder="Search..." />
         <button type="submit">Search</button>
     </form>
 </header>
-<main>
+<main id="main-content">
     <slot />
 </main>
 
@@ -168,6 +170,22 @@
 </footer>
 
 <style>
+    .skip-to-content {
+        position: absolute;
+        left: -9999px;
+        z-index: 999;
+        padding: 1em;
+        background-color: #000;
+        color: white;
+        text-decoration: none;
+        border-radius: 0 0 4px 0;
+    }
+
+    .skip-to-content:focus {
+        left: 0;
+        top: 0;
+    }
+
     header {
         background-color: #f0f0f0;
         padding: 20px;

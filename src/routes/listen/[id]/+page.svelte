@@ -49,7 +49,7 @@ commentField.focus();
 <h1>{data.audio.title}</h1>
 
 <div class="audio-player">
-    <audio controls id="player" on:play={handlePlay} autofocus>
+    <audio controls id="player" on:play={handlePlay} autofocus aria-label="Audio player for {data.audio.title}">
         <source src="/{data.audio.path}" type={data.mimeType} />
         <source src="/{data.audio.transcodedPath}" type="audio/aac" />
         <p>Your browser doesn't support the audio element.</p>
@@ -162,7 +162,7 @@ commentField.focus();
                 until it's reviewed.
             </p>
         {/if}
-        <form use:enhance action="?/add_comment" method="POST">
+        <form use:enhance action="?/add_comment" method="POST" aria-label="Add a comment">
             {#if form?.replyTo}
             <input type="hidden" name="parentId" value={form.replyTo.id} />
             <label for="comment">Reply to @{form.replyTo.user.name}:</label>

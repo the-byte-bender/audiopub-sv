@@ -128,7 +128,7 @@
 </section>
 
 {#if totalPages > 1}
-    <div class="pagination">
+    <nav class="pagination" role="navigation" aria-label="Pagination">
         {#if page > 1}
             <a
                 href={`${paginationBaseUrl}${paginationQuerySeparator}page=${page - 1}`}
@@ -142,7 +142,7 @@
                 >Next</a
             >
         {/if}
-    </div>
+    </nav>
 {/if}
 
 <style>
