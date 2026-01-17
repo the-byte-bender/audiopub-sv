@@ -48,6 +48,8 @@ export let form: any;
 commentField.focus();
     }
 
+    let deleteAudioForm: HTMLFormElement;
+
     async function handleDeleteAudio() {
         const confirmed = await dialog.confirm({
             title: "Delete audio?",
@@ -57,9 +59,8 @@ commentField.focus();
             danger: true
         });
 
-        if (confirmed) {
-            const form = document.querySelector('form[action="?/delete"]') as HTMLFormElement;
-            form?.submit();
+        if (confirmed && deleteAudioForm) {
+            deleteAudioForm.submit();
         }
     }
 </script>
@@ -139,7 +140,7 @@ commentField.focus();
     {/if}
 
     {#if data.user && (data.isAdmin || data.user.id === data.audio.user?.id)}
-        <form action="?/delete" method="POST">
+        <form bind:this={deleteAudioForm} action="?/delete" method="POST">
             <button type="button" on:click={handleDeleteAudio}> Permanently delete</button>
         </form>
     {/if}

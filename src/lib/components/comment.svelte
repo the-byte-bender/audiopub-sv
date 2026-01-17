@@ -29,6 +29,7 @@
     export let isAdmin: boolean = false;
     export let onReply: ((comment: ClientsideComment) => void) = comment => {};
     let replyDisabled: boolean = false;
+    let deleteDisabled: boolean = false;
 
     $: commentDate = comment
         ? formatRelative(new Date(comment.createdAt), new Date())
@@ -44,13 +45,9 @@
         });
 
         if (confirmed) {
-            const form = document.querySelector(`form[action="?/delete_comment"]`) as HTMLFormElement;
+            const form = document.getElementById(`delete-comment-form-${comment.id}`) as HTMLFormElement;
             if (form) {
-                const input = form.querySelector('input[name="id"]') as HTMLInputElement;
-                if (input) {
-                    input.value = comment.id;
-                    form.submit();
-                }
+                form.requestSubmit();
             }
         }
     }
@@ -67,7 +64,7 @@
   </h3>
   <SafeMarkdown source={comment.content} />
 
-  <div id="comment-actions">
+  <div class="comment-actions">
     {#if user}
       <form method="post" action="?/reply_to_comment" use:enhance={() => {
         replyDisabled = true;
@@ -83,7 +80,22 @@
     {/if}
 
     {#if isAdmin || (user && user.id === comment.user.id)}
-      <button on:click={handleDeleteComment}>Delete</button>
+      <form
+        id={`delete-comment-form-${comment.id}`}
+        method="post"
+        action="?/delete_comment"
+        use:enhance={() => {
+          deleteDisabled = true;
+          return async ({ update }) => {
+            await update();
+            deleteDisabled = false;
+          };
+        }}
+        style="display: none;"
+      >
+        <input type="hidden" name="id" value={comment.id} />
+      </form>
+      <button on:click={handleDeleteComment} disabled={deleteDisabled}>Delete</button>
     {/if}
   </div>
 </div>
@@ -120,7 +132,7 @@
     margin-top: 0.5rem;
   }
 
-  .comment #comment-actions {
+  .comment .comment-actions {
     margin-top: 0.5rem;
     display: flex;
     gap: 0.5rem;
@@ -130,7 +142,7 @@
 
   /* prevent direct child forms inside the actions area from adding extra vertical spacing
      (this avoids changing layouts inside nested components like the Modal) */
-  .comment #comment-actions > form {
+  .comment .comment-actions > form {
     margin: 0;
   }
 </style>
