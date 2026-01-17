@@ -17,8 +17,13 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
+  import { enhance } from "$app/forms";
   import title from "$lib/title";
+  import type { ActionData } from "./$types";
   import { onMount } from "svelte";
+
+  export let form: ActionData;
+
   onMount(() => title.set("Forgot Password"));
 </script>
 
@@ -29,7 +34,16 @@
   send you a link to reset your password.
 </p>
 
-<form action="/forgot_password" method="post">
+<form use:enhance method="POST">
+  {#if form?.message}
+    <div
+      class={form.success !== false ? "success-message" : "error-message"}
+      role="alert"
+    >
+      {form.message}
+    </div>
+  {/if}
+
   <div class="form-group">
     <label for="email">Email</label>
     <input
@@ -40,12 +54,35 @@
       class="form-control"
       required
       autofocus
+      value={form?.email ?? ""}
     />
   </div>
   <button type="submit" class="btn">Send reset link</button>
 </form>
 
 <style>
+  .error-message {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    text-align: center;
+  }
+
+  .success-message {
+    color: #155724;
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    text-align: center;
+  }
+
   h1 {
     text-align: center;
     margin-bottom: 1rem;

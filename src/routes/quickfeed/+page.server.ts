@@ -222,7 +222,7 @@ export const actions: Actions = {
         // Check if audio exists
         const audio = await Audio.findByPk(audioId);
         if (!audio) {
-            return error(404, "Audio not found");
+            return fail(404, { comment, message: "Audio not found" });
         }
 
         try {

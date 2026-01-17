@@ -39,13 +39,18 @@
     {/if}
 
     <label for="email">Email:</label>
-    <input type="email" id="email" name="email" value={data.email} />
+    <input
+        type="email"
+        id="email"
+        name="email"
+        value={form?.email ?? data.email}
+    />
     <label for="displayName">Display Name:</label>
     <input
         type="text"
         id="displayName"
         name="displayName"
-        value={data.displayName}
+        value={form?.displayName ?? data.displayName}
         minlength="3"
         maxlength="30"
     />
@@ -78,6 +83,8 @@
         border-radius: 4px;
         padding: 0.75rem;
         margin-bottom: 1rem;
+        width: 100%;
+        text-align: center;
     }
 
     form {

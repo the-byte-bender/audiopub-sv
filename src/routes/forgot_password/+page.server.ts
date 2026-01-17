@@ -25,16 +25,15 @@ export const actions: Actions = {
     const form = await event.request.formData();
     const email = form.get("email") as string;
     if (!email) {
-      return fail(400);
+      return fail(400, { email, message: "Email is required" });
     }
     const user = await User.findOne({ where: { email } });
     if (!user) {
-      return fail(404);
+      return fail(404, { email, message: "User not found" });
     }
     await user.generateResetPasswordToken();
     return {
-      status: 200,
-      body: { message: "Reset password email sent" },
+      message: "Reset password email sent",
     };
   },
 };

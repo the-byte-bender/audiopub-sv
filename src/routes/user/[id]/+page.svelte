@@ -21,11 +21,20 @@
     import AudioList from "$lib/components/audio_list.svelte";
     import title from "$lib/title.js";
     import { onMount } from "svelte";
+    import type { ActionData } from "./$types";
+
     export let data;
+    export let form: ActionData;
     onMount(() => title.set(`${data.profileUser.displayName}'s Profile`));
 </script>
 
 <h1>{data.profileUser.displayName}'s Profile</h1>
+
+{#if form?.message}
+    <div class="error-message" role="alert">
+        {form.message}
+    </div>
+{/if}
 
 <table>
     <tbody>
@@ -86,6 +95,16 @@
 />
 
 <style>
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+
     details {
         border: 1px solid #ddd;
         border-radius: 4px;

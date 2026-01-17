@@ -36,42 +36,73 @@ export const actions: Actions = {
         if (!user) {
             return redirect(303, "/login");
         }
+
+        const formData = await event.request.formData();
+        const file = formData.get("file") as File;
+        const title = formData.get("title") as string;
+        const description = formData.get("description") as string;
+
         if (user.isBanned) {
-            return error(403, "You are banned");
+            return fail(403, {
+                error: "You are banned",
+                title,
+                description,
+            });
         }
         if (!user.isVerified) {
-            return error(403, "Please verify your email first.");
+            return fail(403, {
+                error: "Please verify your email first.",
+                title,
+                description,
+            });
         }
         if (!user.isTrusted) {
             const userAudioCount = await Audio.count({
                 where: { userId: user.id },
             });
             if (userAudioCount >= 1) {
-                return error(
-                    403,
-                    "Please wait for your account to be reviewed."
-                );
+                return fail(403, {
+                    error: "Please wait for your account to be reviewed.",
+                    title,
+                    description,
+                });
             }
         }
-        const form = await event.request.formData();
-        const file = form.get("file") as File;
-        const title = form.get("title") as string;
-        const description = form.get("description") as string;
-        if (!file) {
-            return fail(400, { title, description });
+        if (!file || file.size === 0) {
+            return fail(400, {
+                error: "Audio file is required",
+                title,
+                description,
+            });
         }
         if (!title) {
-            return fail(400, { title, description });
+            return fail(400, {
+                error: "Title is required",
+                title,
+                description,
+            });
         }
         if (title.length < 3 || title.length > 120) {
-            return fail(400, { title, description });
+            return fail(400, {
+                error: "Title must be between 3 and 120 characters",
+                title,
+                description,
+            });
         }
         if (description && description.length > 5000) {
-            return fail(400, { title, description });
+            return fail(400, {
+                error: "Description is too long",
+                title,
+                description,
+            });
         }
         if (file.size > 1024 * 1024 * 500) {
             // 500 MB
-            return fail(400, { title, description });
+            return fail(400, {
+                error: "File size exceeds 500MB limit",
+                title,
+                description,
+            });
         }
         const audio = await Audio.create({
             title,

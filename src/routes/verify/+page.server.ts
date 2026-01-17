@@ -28,10 +28,10 @@ export const actions: Actions = {
       return redirect(303, "/login");
     }
     if (!token) {
-      return fail(400, { message: "Token is required" });
+      return fail(400, { token, message: "Token is required" });
     }
     if (token !== user.verificationToken) {
-      return fail(400, { message: "Invalid token" });
+      return fail(400, { token, message: "Invalid token" });
     }
     await user.verify(token);
     event.cookies.set("token", await user.generateToken(), { path: "/" });

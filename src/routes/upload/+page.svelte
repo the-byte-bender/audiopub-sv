@@ -20,6 +20,10 @@
     import { enhance } from "$app/forms";
     import title from "$lib/title";
     import { onMount } from "svelte";
+    import type { ActionData } from "./$types";
+
+    export let form: ActionData;
+
     onMount(() => title.set("Upload Audio"));
     let submitting = false;
 </script>
@@ -37,6 +41,12 @@
     method="POST"
     enctype="multipart/form-data"
 >
+    {#if form?.error}
+        <div class="error-message" role="alert">
+            {form.error}
+        </div>
+    {/if}
+
     <div class="form-group">
         <label for="title">Title:</label>
         <input
@@ -48,6 +58,7 @@
             minlength="3"
             maxlength="120"
             class="form-control"
+            value={form?.title ?? ""}
         />
     </div>
     <div class="form-group">
@@ -57,7 +68,7 @@
             name="description"
             maxlength="5000"
             class="form-control"
-        ></textarea>
+        >{form?.description ?? ""}</textarea>
     </div>
     <div class="form-group">
         <label for="audio">Audio File:</label>
@@ -85,6 +96,17 @@
 </form>
 
 <style>
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        width: 100%;
+        text-align: center;
+    }
+
     h1 {
         text-align: center;
         margin-bottom: 1rem;

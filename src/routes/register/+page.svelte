@@ -47,6 +47,7 @@
             minlength="3"
             maxlength="24"
             class="form-control"
+            value={form?.username ?? ""}
         />
     </div>
     <div class="form-group">
@@ -57,6 +58,7 @@
             name="email"
             required
             class="form-control"
+            value={form?.email ?? ""}
         />
     </div>
     <div class="form-group">
@@ -82,6 +84,8 @@
         border-radius: 4px;
         padding: 0.75rem;
         margin-bottom: 1rem;
+        width: 100%;
+        text-align: center;
     }
 
     h1 {

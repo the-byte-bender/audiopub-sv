@@ -78,6 +78,11 @@ commentField.focus();
 />
 
 <div class="audio-details">
+    {#if form?.message && !form?.comment}
+        <div class="error-message" role="alert">
+            {form.message}
+        </div>
+    {/if}
     <div class="audio-stats">
         <span>{data.audio.playsString}</span>
         <span>{favoritesString}</span>
@@ -161,14 +166,20 @@ commentField.focus();
             </p>
         {/if}
         <form use:enhance action="?/add_comment" method="POST" aria-label="Add a comment">
+            {#if form?.message}
+                <p class="error-message" role="alert">{form.message}</p>
+            {/if}
             {#if form?.replyTo}
             <input type="hidden" name="parentId" value={form.replyTo.id} />
             <label for="comment">Reply to @{form.replyTo.user.name}:</label>
+            {:else if form?.parentId}
+            <input type="hidden" name="parentId" value={form.parentId} />
+            <label for="comment">Reply (ID: {form.parentId}):</label>
             {:else}
             <label for="comment">Add a comment:</label>
             {/if}
-            <textarea bind:this={commentField} name="comment" id="comment" required maxlength="4000"></textarea>
-            <button type="submit">{form?.replyTo ? 'Reply' : 'Comment'}</button>
+            <textarea bind:this={commentField} name="comment" id="comment" required maxlength="4000">{form?.comment ?? ""}</textarea>
+            <button type="submit">{form?.replyTo || form?.parentId ? 'Reply' : 'Comment'}</button>
         </form>
     {/if}
 </div>
@@ -237,6 +248,16 @@ commentField.focus();
     .audio-details a {
         color: #007bff;
         text-decoration: none;
+    }
+
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        text-align: center;
     }
 
     /* Styling for the description section */
