@@ -43,7 +43,6 @@
             id="username"
             name="username"
             required
-            autofocus
             minlength="3"
             maxlength="24"
             class="form-control"

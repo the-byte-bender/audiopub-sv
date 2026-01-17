@@ -53,7 +53,6 @@
       placeholder="Email"
       class="form-control"
       required
-      autofocus
       value={form?.email ?? ""}
     />
   </div>

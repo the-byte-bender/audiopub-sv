@@ -54,7 +54,6 @@
             id="title"
             name="title"
             required
-            autofocus
             minlength="3"
             maxlength="120"
             class="form-control"

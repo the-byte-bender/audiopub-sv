@@ -21,7 +21,9 @@
     import SafeMarkdown from "./safe_markdown.svelte";
 
     export let audio: ClientsideAudio;
+    /** @deprecated current user is not used in audio_item anymore */
     export let currentUser: ClientsideUser | null = null;
+    currentUser; // silence unused export warning
 
     $: favoritesString = (() => {
         const count = audio.favoriteCount || 0;

@@ -17,32 +17,32 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-  import { dialog } from '$lib/stores/dialog';
+  import { dialog as dialogStore } from '$lib/stores/dialog';
   import type { DialogState } from '$lib/stores/dialog';
 
   let dialogElement: HTMLDialogElement;
   let inputValue: string = '';
 
-  $: if (dialogElement && $dialog) {
+  $: if (dialogElement && $dialogStore) {
     dialogElement.showModal();
   } else if (dialogElement) {
     dialogElement.close();
   }
 
   function handleConfirm() {
-    if ($dialog?.type === 'prompt') {
-      $dialog.resolve?.(inputValue);
+    if ($dialogStore?.type === 'prompt') {
+      $dialogStore.resolve?.(inputValue);
     } else {
-      $dialog?.resolve?.(true);
+      $dialogStore?.resolve?.(true);
     }
     inputValue = '';
   }
 
   function handleCancel() {
-    if ($dialog?.type === 'alert') {
-      $dialog.resolve?.();
+    if ($dialogStore?.type === 'alert') {
+      $dialogStore.resolve?.();
     } else {
-      $dialog?.resolve?.(null);
+      $dialogStore?.resolve?.(null);
     }
     inputValue = '';
   }
@@ -55,7 +55,7 @@
     }
   }
 
-  $: if ($dialog?.type === 'prompt' && dialogElement?.open) {
+  $: if ($dialogStore?.type === 'prompt' && dialogElement?.open) {
     const input = dialogElement?.querySelector('input');
     setTimeout(() => input?.focus(), 0);
   }
@@ -68,38 +68,38 @@
   aria-labelledby="dialog-title"
   aria-describedby="dialog-message"
 >
-  <div on:click|stopPropagation on:keydown={handleKeydown}>
-    {#if $dialog}
-      <h2 id="dialog-title">{$dialog.title}</h2>
+  <div on:click|stopPropagation on:keydown={handleKeydown} role="presentation">
+    {#if $dialogStore}
+      <h2 id="dialog-title">{$dialogStore.title}</h2>
       
-      <p id="dialog-message">{$dialog.message}</p>
+      <p id="dialog-message">{$dialogStore.message}</p>
 
-      {#if $dialog.type === 'prompt'}
+      {#if $dialogStore.type === 'prompt'}
         <input
           type="text"
-          placeholder={$dialog.placeholder || ''}
+          placeholder={$dialogStore.placeholder || ''}
           bind:value={inputValue}
           on:keydown={handleKeydown}
         />
       {/if}
 
       <div class="button-group">
-        {#if $dialog.type !== 'alert'}
+        {#if $dialogStore.type !== 'alert'}
           <button 
             type="button" 
             class="cancel-button"
             on:click={handleCancel}
           >
-            {$dialog.cancelText || 'Cancel'}
+            {$dialogStore.cancelText || 'Cancel'}
           </button>
         {/if}
         <button
           type="button"
           class="confirm-button"
-          class:danger={$dialog.danger}
+          class:danger={$dialogStore.danger}
           on:click={handleConfirm}
         >
-          {$dialog.confirmText || 'OK'}
+          {$dialogStore.confirmText || 'OK'}
         </button>
       </div>
     {/if}

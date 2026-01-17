@@ -98,11 +98,11 @@
     });
 </script>
 
-<svelte head>
+<svelte:head>
     <title
         >{unreadCount > 0 ? `(${unreadCount}) ` : ""}{$title} | audiopub</title
     >
-</svelte>
+</svelte:head>
 
 <Dialog />
 

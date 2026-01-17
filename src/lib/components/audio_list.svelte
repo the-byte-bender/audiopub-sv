@@ -128,7 +128,7 @@
 </section>
 
 {#if totalPages > 1}
-    <nav class="pagination" role="navigation" aria-label="Pagination">
+    <nav class="pagination" aria-label="Pagination">
         {#if page > 1}
             <a
                 href={`${paginationBaseUrl}${paginationQuerySeparator}page=${page - 1}`}

@@ -49,7 +49,6 @@
             name="token"
             placeholder="Verification token"
             class="form-control"
-            autofocus
             value={form?.token ?? ""}
         />
     </div>
