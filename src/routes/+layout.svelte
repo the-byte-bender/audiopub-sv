@@ -236,8 +236,6 @@
 
     main {
         padding: 20px;
-        /* Account for sticky header - approximate height is 80px (40px padding + ~40px content) */
-        padding-top: calc(20px + 80px);
     }
 
     footer {

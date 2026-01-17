@@ -17,13 +17,10 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
+    import type { ClientsideAudio } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
 
     export let audio: ClientsideAudio;
-    /** @deprecated current user is not used in audio_item anymore */
-    export let currentUser: ClientsideUser | null = null;
-    currentUser; // silence unused export warning
 
     $: favoritesString = (() => {
         const count = audio.favoriteCount || 0;

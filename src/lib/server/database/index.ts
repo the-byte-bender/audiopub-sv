@@ -45,8 +45,8 @@ const database = new Sequelize({
     password: process.env.DATABASE_PASSWORD,
     models: [User, Audio, Comment, PlaysTracker, Notification, AudioFollow, AudioFavorite, AudioEditHistory],
     logging: false,
-    host: "127.0.0.1",
-    port: 3306,
+    host: process.env.DATABASE_HOST || "127.0.0.1",
+    port: parseInt(process.env.DATABASE_PORT || "3306", 10),
 });
 
 export default database;

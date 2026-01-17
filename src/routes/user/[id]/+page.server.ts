@@ -29,6 +29,15 @@ export const load: PageServerLoad = async (event) => {
     if (!profileUser) {
         return redirect(303, "/");
     }
+
+    // Visibility check: Filter audios by { isTrusted: true } unless user is admin or the profile owner
+    const isAdmin = event.locals.user?.isAdmin;
+    const isOwner = event.locals.user?.id === profileUser.id;
+    
+    if (!profileUser.isTrusted && !isAdmin && !isOwner) {
+        throw error(403, "This user is not trusted and their content is hidden.");
+    }
+
     const audios = await Audio.findAndCountAll({
         where: { userId: profileUser.id},
         limit,

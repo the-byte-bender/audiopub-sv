@@ -28,8 +28,7 @@ import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
-import { json, Op, Sequelize } from "sequelize";
-import { Json } from "sequelize/lib/utils";
+import { Op, Sequelize } from "sequelize";
 import { createCommentWithNotifications, validateCommentContent } from "$lib/server/interactions";
 
 export const load: PageServerLoad = async (event) => {
@@ -39,13 +38,20 @@ export const load: PageServerLoad = async (event) => {
     return error(404, "Not found");
   }
 
+  // Visibility check: Filter audios by { isTrusted: true } unless user is admin or owner
+  const isAdmin = event.locals.user?.isAdmin;
+  const isOwner = event.locals.user?.id === audio.userId;
+  if (audio.user && !audio.user.isTrusted && !isAdmin && !isOwner) {
+    throw error(403, "This audio is from an untrusted user and is not visible yet.");
+  }
+
   const comments = await Comment.findAll({
     where: { audioId: audio.id },
     include: {
       model: User,
       where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
     },
-    // order: [["createdAt", "ASC"]],
+    order: [["createdAt", "ASC"]],
   });
 
   if (event.locals.user) {
