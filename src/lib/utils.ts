@@ -72,6 +72,8 @@ export function clamp(value: number, min: number, max: number): number {
  * Try to register a play for an audio if it has been played for a sufficient duration.
  */
 export async function registerPlay(audioId: string, currentTime: number, duration: number): Promise<boolean> {
+    if (!duration || duration <= 0) return false;
+
     // Only register if we've played at least 5 seconds or 50% of the audio
     const minimumPlayTime = Math.min(5, duration * 0.5);
     if (currentTime >= minimumPlayTime) {

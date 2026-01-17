@@ -21,11 +21,14 @@ import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 
 export const POST: RequestHandler = async (event) => {
-  const ip = event.request.headers.get("x-forwarded-for");
-  const audio = await Audio.findByPk(event.params.id);
-  if (!ip) {
-    return error(401, "Unauthorized");
+  let ip: string;
+  try {
+    ip = event.getClientAddress();
+  } catch (e) {
+    ip = event.request.headers.get("x-forwarded-for") || "unknown";
   }
+
+  const audio = await Audio.findByPk(event.params.id);
   if (!audio) {
     return error(404, "Audio not found");
   }
