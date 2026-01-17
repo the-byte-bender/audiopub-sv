@@ -38,6 +38,7 @@ import User, { type UserInfo } from "./user";
 import Comment from "./comment";
 import PlaysTracker from "./plays_tracker";
 import AudioFavorite from "./audio_favorite";
+import AudioEditHistory from "./audio_edit_history";
 import type { ClientsideAudio } from "$lib/types";
 
 export interface AudioInfo {
@@ -88,6 +89,11 @@ export default class Audio extends Model {
     @Column(DataType.BOOLEAN)
     declare isFromAi: boolean;
 
+    @AllowNull(false)
+    @Default(0)
+    @Column(DataType.INTEGER)
+    declare editCount: number;
+
     @ForeignKey(() => User)
     @Column(DataType.UUID)
     declare userId: string;
@@ -100,6 +106,9 @@ export default class Audio extends Model {
 
     @HasMany(() => AudioFavorite)
     declare audioFavorites?: AudioFavorite[];
+
+    @HasMany(() => AudioEditHistory)
+    declare editHistory?: AudioEditHistory[];
 
     get path(): string {
         return `audio/${this.id}`;
@@ -166,6 +175,7 @@ export default class Audio extends Model {
             playsString: this.playsString,
             favoriteCount: favoriteCount ?? 0,
             isFavorited: isFavorited,
+            editCount: this.editCount,
             createdAt: this.createdAt.getTime(),
             user: includeUser ? this.user?.toClientside() : undefined,
         };

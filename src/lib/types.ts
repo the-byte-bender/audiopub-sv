@@ -38,9 +38,20 @@ export interface ClientsideAudio {
     playsString: string;
     favoriteCount: number;
     isFavorited?: boolean;
+    editCount: number;
     createdAt: number;
     user?: ClientsideUser;
     comments?: ClientsideComment[];
+}
+
+export interface ClientsideAudioEditHistory {
+    id: string;
+    audioId: string;
+    oldTitle: string;
+    oldDescription: string;
+    newTitle: string;
+    newDescription: string;
+    createdAt: number;
 }
 
 export interface ClientsideComment {

@@ -110,6 +110,16 @@
                 <span class="button-text">Add to favorites</span>
             </button>
         {/if}
+
+        {#if (audio.user?.id === user.id && audio.editCount < 3) || user.isAdmin}
+            <a href="/audio/{audio.id}/edit" class="edit-link-button" aria-label="Edit audio">
+                <svg class="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                <span class="button-text">Edit</span>
+            </a>
+        {/if}
     {/if}
     
     {#if showShare}
@@ -195,8 +205,29 @@
     }
 
     .heart-icon,
-    .share-icon {
+    .share-icon,
+    .edit-icon {
         flex-shrink: 0;
+    }
+
+    .edit-link-button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid #ccc;
+        background: transparent;
+        color: #333;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .edit-link-button:hover {
+        background: #f0f0f0;
+        border-color: #999;
     }
 
     .share-feedback {
@@ -215,7 +246,8 @@
     }
 
     .compact .favorite-button,
-    .compact .share-button {
+    .compact .share-button,
+    .compact .edit-link-button {
         padding: 6px;
     }
 
@@ -230,7 +262,8 @@
     }
 
     .dark .favorite-button,
-    .dark .share-button {
+    .dark .share-button,
+    .dark .edit-link-button {
         width: 56px;
         height: 56px;
         border-radius: 50%;
@@ -247,7 +280,8 @@
     }
 
     .dark .favorite-button:hover:not(.disabled),
-    .dark .share-button:hover {
+    .dark .share-button:hover,
+    .dark .edit-link-button:hover {
         background: rgba(255, 255, 255, 0.3);
         transform: scale(1.1);
         border: none;
@@ -260,7 +294,8 @@
     }
 
     .dark .heart-icon,
-    .dark .share-icon {
+    .dark .share-icon,
+    .dark .edit-icon {
         width: 32px;
         height: 32px;
     }

@@ -25,6 +25,7 @@ import PlaysTracker from "./models/plays_tracker";
 import Notification from "./models/notification";
 import AudioFollow from "./models/audio_follow";
 import AudioFavorite from "./models/audio_favorite";
+import AudioEditHistory from "./models/audio_edit_history";
 dotenv.config();
 
 if (
@@ -42,7 +43,7 @@ const database = new Sequelize({
     dialect: "mariadb",
     username: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
-    models: [User, Audio, Comment, PlaysTracker, Notification, AudioFollow, AudioFavorite],
+    models: [User, Audio, Comment, PlaysTracker, Notification, AudioFollow, AudioFavorite, AudioEditHistory],
     logging: false,
     host: "127.0.0.1",
     port: 3306,
@@ -50,4 +51,4 @@ const database = new Sequelize({
 
 export default database;
 
-export { User, Audio, Comment, PlaysTracker, Notification, AudioFollow, AudioFavorite };
+export { User, Audio, Comment, PlaysTracker, Notification, AudioFollow, AudioFavorite, AudioEditHistory };
