@@ -62,6 +62,12 @@
         minlength="8"
         maxlength="64"
     />
+    <label for="bio">Bio:</label>
+    <textarea
+        id="bio"
+        name="bio"
+        placeholder="Write something about yourself..."
+    >{data.profileUser.bio}</textarea>
     <button type="submit">Update</button>
 </form>
 
@@ -100,9 +106,15 @@
     }
 
     input[type="text"],
-    input[type="email"] {
+    input[type="email"],
+    textarea {
         padding: 0.5rem;
         border: 1px solid #ccc;
+    }
+
+    textarea {
+        min-height: 100px;
+        font-family: inherit;
     }
 
     button {

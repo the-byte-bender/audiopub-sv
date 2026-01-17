@@ -62,6 +62,7 @@ export const actions: Actions = {
     let email = data.get("email") as string;
     let displayName = data.get("displayName") as string;
     let password = data.get("password") as string;
+    let bio = data.get("bio") as string;
     if (email) {
       email = email.trim().toLowerCase();
       if (
@@ -97,6 +98,16 @@ export const actions: Actions = {
       }
       user.password = await hash(password, 12);
       user.version++;
+    }
+    if (bio !== null && bio !== undefined) {
+      if (bio.length > 2000) {
+        return fail(400, {
+          email,
+          displayName,
+          message: "Bio cannot be longer than 2000 characters",
+        });
+      }
+      user.bio = bio;
     }
     await user.save();
     event.cookies.set("token", await user.generateToken(), { path: "/" });

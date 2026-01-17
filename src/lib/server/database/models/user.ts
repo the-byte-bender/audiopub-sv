@@ -51,6 +51,7 @@ export interface UserInfo {
   displayName: string;
   isBanned: boolean;
   isVerified: boolean;
+  bio: string;
 }
 
 @Table
@@ -113,6 +114,10 @@ export default class User extends Model {
   @Default(0)
   @Column(DataType.INTEGER)
   declare version: number;
+
+  @AllowNull(true)
+  @Column(DataType.TEXT)
+  declare bio: string | null;
 
   @CreatedAt
   declare createdAt: Date;
@@ -243,6 +248,7 @@ export default class User extends Model {
       displayName: this.displayName,
       isBanned: this.isBanned,
       isVerified: this.isVerified,
+      bio: this.bio || "",
     };
   }
 
@@ -254,6 +260,7 @@ export default class User extends Model {
       isBanned: this.isBanned,
       isVerified: this.isVerified,
       isTrusted: this.isTrusted,
+      bio: this.bio || "",
     };
   }
 

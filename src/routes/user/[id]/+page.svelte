@@ -19,16 +19,24 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import AudioList from "$lib/components/audio_list.svelte";
+    import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import title from "$lib/title.js";
     import { onMount } from "svelte";
     import type { ActionData } from "./$types";
 
     export let data;
     export let form: ActionData;
+
     onMount(() => title.set(`${data.profileUser.displayName}'s Profile`));
 </script>
 
 <h1>{data.profileUser.displayName}'s Profile</h1>
+
+{#if data.user && data.user.id === data.profileUser.id}
+    <p class="edit-profile-notice">
+        You can edit your profile at <a href="/profile">settings</a>.
+    </p>
+{/if}
 
 {#if form?.message}
     <div class="error-message" role="alert">
@@ -52,6 +60,20 @@
         </tr>
     </tbody>
 </table>
+
+<div class="bio-section">
+    <div class="bio-header">
+        <h2>Bio</h2>
+    </div>
+
+    <div class="bio-content">
+        {#if data.profileUser.bio}
+            <SafeMarkdown source={data.profileUser.bio} />
+        {:else}
+            <p><i>No bio provided.</i></p>
+        {/if}
+    </div>
+</div>
 
 {#if data.isAdmin}
     {#if !data.profileUser.isTrusted}
@@ -145,5 +167,47 @@
 
     button:hover {
         background-color: #444;
+    }
+
+    .edit-profile-notice {
+        background-color: #e7f3ff;
+        border: 1px solid #b2d4ff;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.95rem;
+    }
+
+    .edit-profile-notice a {
+        font-weight: bold;
+        color: #0056b3;
+    }
+
+    .bio-section {
+        margin: 2rem 0;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #fcfcfc;
+    }
+
+    .bio-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .bio-header h2 {
+        margin: 0;
+    }
+
+    .bio-content {
+        line-height: 1.6;
+    }
+
+    .small-button {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
     }
 </style>
