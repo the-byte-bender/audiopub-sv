@@ -205,11 +205,10 @@
 
 <svelte:window on:keydown={handleKeyDown} />
 
-<div
+<section
     class="player-shell"
     class:dark={progressVariant === 'dark'}
     bind:this={container}
-    role="region"
     aria-label="Audio player for {title}"
 >
     <PlayerControls
@@ -233,7 +232,7 @@
         Keyboard shortcuts: Space or K to play/pause, Left/Right arrows to seek (Shift for bigger steps),
         {#if !disableArrowVolume}Up/Down arrows or{/if} +/- or [/] to change volume (Shift for bigger steps), M to mute/unmute
     </div>
-</div>
+</section>
 
 <style>
     .player-shell {

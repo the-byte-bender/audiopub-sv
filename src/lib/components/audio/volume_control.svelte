@@ -123,7 +123,6 @@
         class="volume-slider"
         style="--volume-percent: {volumePercent}"
         aria-label="Volume"
-        aria-valuetext="{volumePercent}%"
     />
 </div>
 

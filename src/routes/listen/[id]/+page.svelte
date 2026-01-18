@@ -123,7 +123,7 @@ commentField.focus();
             <button type="button" on:click={handleDeleteAudio}> Permanently delete</button>
         </form>
     {/if}
-<section role="group" aria-label="Comments">
+<section aria-label="Comments">
   <h2>Comments</h2>
   {#if data.comments.length > 0}
     <CommentList
@@ -260,7 +260,7 @@ commentField.focus();
         background-color: #0056b3;
     }
 
-      section[role="group"] {
+  section {
     margin-top: 1rem;
     padding: 1rem;
     background-color: #f9f9f9;
@@ -268,13 +268,13 @@ commentField.focus();
     border-radius: 8px;
   }
 
-  section[role="group"] h2 {
+  section h2 {
     color: #333;
     font-size: 1.5rem;
     margin-bottom: 1rem;
   }
 
-    section[role="group"] p {
+  section p {
     margin-top: 1rem;
     color: #888;
   }
