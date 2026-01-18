@@ -16,10 +16,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, User, Comment } from "$lib/server/database";
-import AudioFavorite from "$lib/server/database/models/audio_favorite";
+import { Audio, User, Comment, AudioFavorite } from "$lib/server/database";
 import { type OrderItem, Sequelize } from "sequelize";
-import type { ClientsideAudio } from "$lib/types";
+import type { ClientsideAudio, ClientsideComment } from "$lib/types";
 import type User_model from "$lib/server/database/models/user";
 
 export interface QuickfeedPageOptions {
@@ -30,7 +29,7 @@ export interface QuickfeedPageOptions {
 }
 
 export interface QuickfeedPageResult {
-    audios: (ClientsideAudio & { comments: ReturnType<typeof Comment.prototype.toClientside>[] })[];
+    audios: ClientsideAudio[];
     count: number;
     page: number;
     limit: number;
@@ -91,7 +90,7 @@ export async function getQuickfeedPage(options: QuickfeedPageOptions): Promise<Q
             favoriteCounts = new Map(
                 favoriteCountsData.map(item => [
                     item.audioId, 
-                    parseInt((item as any).get('count')) || 0
+                    parseInt(item.get('count') as string) || 0
                 ])
             );
             userFavorites = new Set(userFavoritesData.map(item => item.audioId));
@@ -115,9 +114,9 @@ export async function getQuickfeedPage(options: QuickfeedPageOptions): Promise<Q
     });
 
     // Group comments by audioId
-    const commentsByAudio = new Map<string, typeof allComments>();
+    const commentsByAudio = new Map<string, Comment[]>();
     allComments.forEach(comment => {
-        const audioId = (comment as any).audioId;
+        const audioId = comment.audioId;
         if (!commentsByAudio.has(audioId)) {
             commentsByAudio.set(audioId, []);
         }

@@ -1702,6 +1702,13 @@
                             variant="dark"
                             showFavoriteCount={true}
                             showShare={true}
+                            onAction={({ type, success }) => {
+                                if (success) {
+                                    audios = audios; // Trigger reactivity for display counts
+                                    const message = type === 'favorite' ? 'Added to favorites' : 'Removed from favorites';
+                                    announceStatus(message);
+                                }
+                            }}
                         />
                         
                         <button 

@@ -34,6 +34,9 @@
     /** Show favorite count */
     export let showFavoriteCount: boolean = true;
 
+    /** Callback called when an action is performed */
+    export let onAction: ((detail: { type: 'favorite' | 'unfavorite', audioId: string, success: boolean }) => void) | null = null;
+
     let shareAnnounced = false;
 
     $: favoritesString = (() => {
@@ -74,6 +77,40 @@
     function canFavorite(user: ClientsideUser | null): boolean {
         return !!user && user.isTrusted && !user.isBanned;
     }
+
+    function handleFavoriteEnhance(action: 'favorite' | 'unfavorite') {
+        return ({ cancel }: { cancel: () => void }) => {
+            if (!user) {
+                cancel();
+                return;
+            }
+
+            // Optimistic update
+            const originalFavorited = audio.isFavorited;
+            const originalCount = audio.favoriteCount;
+
+            audio.isFavorited = action === 'favorite';
+            audio.favoriteCount += (action === 'favorite' ? 1 : -1);
+
+            return async ({ result, update }: { result: any, update: any }) => {
+                const success = result.type === 'success';
+                
+                // If it failed, revert the optimistic update
+                if (!success) {
+                    audio.isFavorited = originalFavorited;
+                    audio.favoriteCount = originalCount;
+                }
+                
+                // Use update({ invalidateAll: false }) to prevent full page reload 
+                // and keep pagination state in Quickfeed
+                await update({ invalidateAll: false });
+                
+                if (onAction) {
+                    onAction({ type: action, audioId: audio.id, success });
+                }
+            };
+        };
+    }
 </script>
 
 <div class="audio-actions" class:compact={variant === 'compact'} class:dark={variant === 'dark'}>
@@ -84,22 +121,30 @@
     {#if user}
         {#if canFavorite(user)}
             {#if audio.isFavorited}
-                <form use:enhance action="?/unfavorite" method="POST" class="action-form">
+                <form use:enhance={handleFavoriteEnhance('unfavorite')} action="?/unfavorite" method="POST" class="action-form">
+                    <input type="hidden" name="audioId" value={audio.id} />
                     <button type="submit" class="favorite-button favorited" aria-label="Remove from favorites">
                         <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
                             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                         </svg>
                         <span class="button-text">Remove from favorites</span>
                     </button>
+                    {#if showFavoriteCount && variant === 'dark'}
+                        <span class="favorites-count">{audio.favoriteCount}</span>
+                    {/if}
                 </form>
             {:else}
-                <form use:enhance action="?/favorite" method="POST" class="action-form">
+                <form use:enhance={handleFavoriteEnhance('favorite')} action="?/favorite" method="POST" class="action-form">
+                    <input type="hidden" name="audioId" value={audio.id} />
                     <button type="submit" class="favorite-button" aria-label="Add to favorites">
                         <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                         </svg>
                         <span class="button-text">Add to favorites</span>
                     </button>
+                    {#if showFavoriteCount && variant === 'dark'}
+                        <span class="favorites-count">{audio.favoriteCount}</span>
+                    {/if}
                 </form>
             {/if}
         {:else}
