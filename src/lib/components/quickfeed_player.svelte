@@ -1672,7 +1672,34 @@
                                 onSeek={(t) => seekToTime(t)}
                                 onVolumeChange={(v) => setMasterVolume(v)}
                                 disableArrowVolume={true}
+                                hideKeyboardHelp={true}
                             />
+                            
+                            <!-- Navigation Buttons -->
+                            <div class="navigation-buttons">
+                                <button 
+                                    class="nav-btn prev-btn"
+                                    on:click={goToPrevious}
+                                    disabled={currentIndex === 0}
+                                    aria-label="Previous audio"
+                                    title="Previous (↑)"
+                                >
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="18 15 12 9 6 15"></polyline>
+                                    </svg>
+                                </button>
+                                <button 
+                                    class="nav-btn next-btn"
+                                    on:click={goToNext}
+                                    disabled={currentIndex >= audios.length - 1 && !hasMoreContent}
+                                    aria-label="Next audio"
+                                    title="Next (↓)"
+                                >
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     
@@ -1795,8 +1822,11 @@
             <div class="hint">↑↓ Navigate</div>
             <div class="hint">Space Play/Pause</div>
             <div class="hint">←→ Seek</div>
+            <div class="hint">+/- Volume</div>
+            <div class="hint">M Mute</div>
             <div class="hint">C Comments</div>
             {#if currentUser}<div class="hint">F Favorite</div>{/if}
+            <div class="hint">S Share</div>
         </div>
         <div class="mobile-hints">
             <div class="hint">Swipe ↑↓ Navigate</div>
@@ -1891,6 +1921,47 @@
     .waveform-container :global(.progress-bar) {
         width: 300px;
         max-width: 90vw;
+    }
+    
+    .navigation-buttons {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .nav-btn {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+    
+    .nav-btn:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: scale(1.05);
+    }
+    
+    .nav-btn:active:not(:disabled) {
+        transform: scale(0.95);
+    }
+    
+    .nav-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+    
+    .nav-btn svg {
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
     }
 
     .loading-spinner {

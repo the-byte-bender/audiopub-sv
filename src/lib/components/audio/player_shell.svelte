@@ -48,6 +48,9 @@
     
     /** If true, PlayerShell will announce play/pause/ended to screen readers. */
     export let announceStateChanges: boolean = true;
+    
+    /** If true, hides the keyboard shortcuts help text (when parent provides its own). */
+    export let hideKeyboardHelp: boolean = false;
 
     // --- Callbacks (commands to the engine) ---
     export let onTogglePlay: () => void = () => {};
@@ -228,10 +231,12 @@
     />
 
     <!-- Keyboard Shortcuts Help (visually hidden) -->
-    <div class="sr-only">
-        Keyboard shortcuts: Space or K to play/pause, Left/Right arrows to seek (Shift for bigger steps),
-        {#if !disableArrowVolume}Up/Down arrows or{/if} +/- or [/] to change volume (Shift for bigger steps), M to mute/unmute
-    </div>
+    {#if !hideKeyboardHelp}
+        <div class="sr-only">
+            Keyboard shortcuts: Space or K to play/pause, Left/Right arrows to seek (Shift for bigger steps),
+            {#if !disableArrowVolume}Up/Down arrows or{/if} +/- or [/] to change volume (Shift for bigger steps), M to mute/unmute
+        </div>
+    {/if}
 </section>
 
 <style>
