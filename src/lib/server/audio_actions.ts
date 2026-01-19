@@ -61,6 +61,14 @@ export async function editAudio(options: EditAudioOptions): Promise<EditAudioRes
         return { success: false, error: "Title must be at least 3 characters long" };
     }
 
+    // Check if any changes were actually made
+    const titleChanged = title !== audio.title;
+    const descriptionChanged = description !== audio.description;
+
+    if (!titleChanged && !descriptionChanged) {
+        return { success: false, error: "No changes detected. Try editing a field." };
+    }
+
     try {
         // Save history before updating
         await AudioEditHistory.create({

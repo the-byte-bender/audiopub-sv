@@ -55,7 +55,7 @@
     export let onVolumeChange: (vol: number) => void = () => {};
 
     // --- Internal state ---
-    let container: HTMLDivElement;
+    let container: HTMLElement | null = null;
     let previousVolume = volume > 0 ? volume : 1;
     let volumeAnnounceTimer: ReturnType<typeof setTimeout> | null = null;
     
