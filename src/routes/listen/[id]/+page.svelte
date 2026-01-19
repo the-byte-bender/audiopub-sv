@@ -24,9 +24,9 @@
     import CommentList from "$lib/components/comment_list.svelte";
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
-  import type { ClientsideComment } from "$lib/types.js";
+    import type { ClientsideComment } from "$lib/types.js";
 
-export let form: any;
+    export let form: any;
 
     onMount(() => title.set(data.audio.title));
     const handlePlay = () => {
@@ -42,7 +42,28 @@ export let form: any;
 
     let commentField: HTMLTextAreaElement;
     function onReply(comment: ClientsideComment) {
-commentField.focus();
+        commentField.focus();
+    }
+
+    function onShareClick() {
+        const url = window.location.href;
+        if (navigator.share) {
+            navigator
+                .share({
+                    title: data.audio.title,
+                    url: url,
+                })
+                .catch((error) => console.log("Error sharing", error));
+        } else {
+            navigator.clipboard
+                .writeText(url)
+                .then(() => {
+                    alert("Link copied to clipboard");
+                })
+                .catch((err) => {
+                    console.error("Could not copy text: ", err);
+                });
+        }
     }
 </script>
 
@@ -63,18 +84,29 @@ commentField.focus();
     >
         Download
     </a>
+    <button on:click={onShareClick}>Share</button><br />
 </div>
 
 <div class="audio-details">
     <div class="audio-stats">
         <span>{data.audio.playsString}</span>
         <span>{favoritesString}</span>
-{#if data.user}
+        {#if data.user}
             {#if data.audio.isFavorited}
                 <form use:enhance action="?/unfavorite" method="POST">
                     <button type="submit" class="favorite-button favorited">
-                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        <svg
+                            class="heart-icon"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                            ></path>
                         </svg>
                         Remove from favorites
                     </button>
@@ -82,8 +114,18 @@ commentField.focus();
             {:else}
                 <form use:enhance action="?/favorite" method="POST">
                     <button type="submit" class="favorite-button">
-                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        <svg
+                            class="heart-icon"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                            ></path>
                         </svg>
                         Add to favorites
                     </button>
@@ -140,19 +182,19 @@ commentField.focus();
             <button type="submit"> Permanently delete</button>
         </form>
     {/if}
-<section role="group" aria-label="Comments">
-  <h2>Comments</h2>
-  {#if data.comments.length > 0}
-    <CommentList
-        comments={data.comments}
-        isAdmin={data.isAdmin}
-        user={data.user}
-        {onReply}
-    />
-    {:else}
-    <p>No comments yet</p>
-  {/if}
-</section>
+    <section role="group" aria-label="Comments">
+        <h2>Comments</h2>
+        {#if data.comments.length > 0}
+            <CommentList
+                comments={data.comments}
+                isAdmin={data.isAdmin}
+                user={data.user}
+                {onReply}
+            />
+        {:else}
+            <p>No comments yet</p>
+        {/if}
+    </section>
 
     {#if data.user && !data.user.isBanned}
         {#if !data.user.isTrusted}
@@ -164,13 +206,19 @@ commentField.focus();
         {/if}
         <form use:enhance action="?/add_comment" method="POST">
             {#if form?.replyTo}
-            <input type="hidden" name="parentId" value={form.replyTo.id} />
-            <label for="comment">Reply to @{form.replyTo.user.name}:</label>
+                <input type="hidden" name="parentId" value={form.replyTo.id} />
+                <label for="comment">Reply to @{form.replyTo.user.name}:</label>
             {:else}
-            <label for="comment">Add a comment:</label>
+                <label for="comment">Add a comment:</label>
             {/if}
-            <textarea bind:this={commentField} name="comment" id="comment" required maxlength="4000"></textarea>
-            <button type="submit">{form?.replyTo ? 'Reply' : 'Comment'}</button>
+            <textarea
+                bind:this={commentField}
+                name="comment"
+                id="comment"
+                required
+                maxlength="4000"
+            ></textarea>
+            <button type="submit">{form?.replyTo ? "Reply" : "Comment"}</button>
         </form>
     {/if}
 </div>
@@ -313,22 +361,22 @@ commentField.focus();
         background-color: #0056b3;
     }
 
-      section[role="group"] {
-    margin-top: 1rem;
-    padding: 1rem;
-    background-color: #f9f9f9;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-  }
+    section[role="group"] {
+        margin-top: 1rem;
+        padding: 1rem;
+        background-color: #f9f9f9;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+    }
 
-  section[role="group"] h2 {
-    color: #333;
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-  }
+    section[role="group"] h2 {
+        color: #333;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
 
     section[role="group"] p {
-    margin-top: 1rem;
-    color: #888;
-  }
+        margin-top: 1rem;
+        color: #888;
+    }
 </style>
