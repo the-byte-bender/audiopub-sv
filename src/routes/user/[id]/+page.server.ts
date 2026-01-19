@@ -17,7 +17,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 import { Audio, Comment, User } from "$lib/server/database";
-import { error, redirect } from "@sveltejs/kit";
+import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -29,6 +29,15 @@ export const load: PageServerLoad = async (event) => {
     if (!profileUser) {
         return redirect(303, "/");
     }
+
+    // Visibility check: Filter audios by { isTrusted: true } unless user is admin or the profile owner
+    const isAdmin = event.locals.user?.isAdmin;
+    const isOwner = event.locals.user?.id === profileUser.id;
+    
+    if (!profileUser.isTrusted && !isAdmin && !isOwner) {
+        throw error(403, "This user is not trusted and their content is hidden.");
+    }
+
     const audios = await Audio.findAndCountAll({
         where: { userId: profileUser.id},
         limit,
@@ -48,11 +57,11 @@ export const actions: Actions = {
     ban: async (event) => {
         const user = event.locals.user;
         if (!user || !user.isAdmin) {
-            return error(403, "Forbidden");
+            return fail(403, { message: "Forbidden" });
         }
         const userToBeBanned = await User.findByPk(event.params.id);
         if (!userToBeBanned) {
-            return error(404, "User not found");
+            return fail(404, { message: "User not found" });
         }
         const form = await event.request.formData();
         const reason = form.get("reason") as string;
@@ -68,11 +77,11 @@ export const actions: Actions = {
     warn: async (event) => {
         const user = event.locals.user;
         if (!user || !user.isAdmin) {
-            return error(403, "Forbidden");
+            return fail(403, { message: "Forbidden" });
         }
         const userToBeWarned = await User.findByPk(event.params.id);
         if (!userToBeWarned) {
-            return error(404, "User not found");
+            return fail(404, { message: "User not found" });
         }
         const form = await event.request.formData();
         const reason = form.get("reason") as string;
@@ -83,11 +92,11 @@ export const actions: Actions = {
     trust: async (event) => {
         const user = event.locals.user;
         if (!user || !user.isAdmin) {
-            return error(403, "Forbidden");
+            return fail(403, { message: "Forbidden" });
         }
         const userToBeTrusted = await User.findByPk(event.params.id);
         if (!userToBeTrusted) {
-            return error(404, "User not found");
+            return fail(404, { message: "User not found" });
         }
         userToBeTrusted.isTrusted = true;
         await userToBeTrusted.save();

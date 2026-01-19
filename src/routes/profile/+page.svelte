@@ -31,6 +31,10 @@
 
 <h1>Your Profile</h1>
 
+<div class="profile-info">
+    <p>Public Profile: <a href={`/@${data.profileUser.name}`}>@{data.profileUser.name}</a></p>
+</div>
+
 <form use:enhance method="POST">
     {#if form?.message}
         <div class="error-message" role="alert">
@@ -39,13 +43,18 @@
     {/if}
 
     <label for="email">Email:</label>
-    <input type="email" id="email" name="email" value={data.email} />
+    <input
+        type="email"
+        id="email"
+        name="email"
+        value={form?.email ?? data.email}
+    />
     <label for="displayName">Display Name:</label>
     <input
         type="text"
         id="displayName"
         name="displayName"
-        value={data.displayName}
+        value={form?.displayName ?? data.displayName}
         minlength="3"
         maxlength="30"
     />
@@ -57,6 +66,12 @@
         minlength="8"
         maxlength="64"
     />
+    <label for="bio">Bio:</label>
+    <textarea
+        id="bio"
+        name="bio"
+        placeholder="Write something about yourself..."
+    >{data.profileUser.bio}</textarea>
     <button type="submit">Update</button>
 </form>
 
@@ -78,6 +93,8 @@
         border-radius: 4px;
         padding: 0.75rem;
         margin-bottom: 1rem;
+        width: 100%;
+        text-align: center;
     }
 
     form {
@@ -93,9 +110,15 @@
     }
 
     input[type="text"],
-    input[type="email"] {
+    input[type="email"],
+    textarea {
         padding: 0.5rem;
         border: 1px solid #ccc;
+    }
+
+    textarea {
+        min-height: 100px;
+        font-family: inherit;
     }
 
     button {

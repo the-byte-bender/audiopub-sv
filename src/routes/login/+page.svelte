@@ -43,8 +43,8 @@
             id="email"
             name="email"
             required
-            autofocus
             class="form-control"
+            value={form?.email ?? ""}
         />
     </div>
     <div class="form-group">
@@ -72,6 +72,8 @@
         border-radius: 4px;
         padding: 0.75rem;
         margin-bottom: 1rem;
+        width: 100%;
+        text-align: center;
     }
 
     h1 {

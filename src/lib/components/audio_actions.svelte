@@ -1,0 +1,353 @@
+<!--
+  This file is part of the audiopub project.
+  
+  Copyright (C) 2025 the-byte-bender
+  
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+  
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU Affero General Public License for more details.
+  
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+<script lang="ts">
+    import { enhance } from "$app/forms";
+    import { browser } from "$app/environment";
+    import { announceToScreenReader } from "$lib/utils";
+    import type { ClientsideUser, ClientsideAudio } from "$lib/types";
+
+    export let audio: ClientsideAudio;
+    export let user: ClientsideUser | null = null;
+    
+    /** Variant changes styling: 'default' for Listen page, 'compact' for lists, 'dark' for quickfeed */
+    export let variant: 'default' | 'compact' | 'dark' = 'default';
+    
+    /** Show the share button */
+    export let showShare: boolean = true;
+    
+    /** Show favorite count */
+    export let showFavoriteCount: boolean = true;
+
+    /** Callback called when an action is performed */
+    export let onAction: ((detail: { type: 'favorite' | 'unfavorite', audioId: string, success: boolean }) => void) | null = null;
+
+    let shareAnnounced = false;
+
+    $: favoritesString = (() => {
+        const count = audio.favoriteCount || 0;
+        if (count === 0) return "No favorites";
+        if (count === 1) return "1 favorite";
+        return `${count} favorites`;
+    })();
+
+    async function handleShare() {
+        if (!browser) return;
+        
+        const url = `${window.location.origin}/listen/${audio.id}`;
+        const shareData = {
+            title: audio.title,
+            text: audio.description ? `${audio.title} - ${audio.description.substring(0, 100)}` : audio.title,
+            url,
+        };
+
+        try {
+            if (navigator.share) {
+                await navigator.share(shareData);
+                announceToScreenReader("Shared successfully");
+            } else if (navigator.clipboard) {
+                await navigator.clipboard.writeText(url);
+                announceToScreenReader("Link copied to clipboard");
+                shareAnnounced = true;
+                setTimeout(() => { shareAnnounced = false; }, 2000);
+            }
+        } catch (err) {
+            // User cancelled or share failed
+            if ((err as Error).name !== 'AbortError') {
+                console.error('Share failed:', err);
+            }
+        }
+    }
+
+    function canFavorite(user: ClientsideUser | null): boolean {
+        return !!user && user.isTrusted && !user.isBanned;
+    }
+
+    function handleFavoriteEnhance(action: 'favorite' | 'unfavorite') {
+        return ({ cancel }: { cancel: () => void }) => {
+            if (!user) {
+                cancel();
+                return;
+            }
+
+            // Optimistic update
+            const originalFavorited = audio.isFavorited;
+            const originalCount = audio.favoriteCount;
+
+            audio.isFavorited = action === 'favorite';
+            audio.favoriteCount += (action === 'favorite' ? 1 : -1);
+
+            return async ({ result, update }: { result: any, update: any }) => {
+                const success = result.type === 'success';
+                
+                // If it failed, revert the optimistic update
+                if (!success) {
+                    audio.isFavorited = originalFavorited;
+                    audio.favoriteCount = originalCount;
+                }
+                
+                // Use update({ invalidateAll: false }) to prevent full page reload 
+                // and keep pagination state in Quickfeed
+                await update({ invalidateAll: false });
+                
+                if (onAction) {
+                    onAction({ type: action, audioId: audio.id, success });
+                }
+            };
+        };
+    }
+</script>
+
+<div class="audio-actions" class:compact={variant === 'compact'} class:dark={variant === 'dark'}>
+    {#if showFavoriteCount && variant === 'default'}
+        <span class="favorites-count">{favoritesString}</span>
+    {/if}
+    
+    {#if user}
+        {#if canFavorite(user)}
+            {#if audio.isFavorited}
+                <form use:enhance={handleFavoriteEnhance('unfavorite')} action="?/unfavorite" method="POST" class="action-form">
+                    <input type="hidden" name="audioId" value={audio.id} />
+                    <button type="submit" class="favorite-button favorited" aria-label="Remove from favorites">
+                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        <span class="button-text">Remove from favorites</span>
+                    </button>
+                    {#if showFavoriteCount && variant === 'dark'}
+                        <span class="favorites-count">{audio.favoriteCount}</span>
+                    {/if}
+                </form>
+            {:else}
+                <form use:enhance={handleFavoriteEnhance('favorite')} action="?/favorite" method="POST" class="action-form">
+                    <input type="hidden" name="audioId" value={audio.id} />
+                    <button type="submit" class="favorite-button" aria-label="Add to favorites">
+                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                        <span class="button-text">Add to favorites</span>
+                    </button>
+                    {#if showFavoriteCount && variant === 'dark'}
+                        <span class="favorites-count">{audio.favoriteCount}</span>
+                    {/if}
+                </form>
+            {/if}
+        {:else}
+            <button type="button" class="favorite-button disabled" disabled aria-label="You must be trusted to favorite" title="You must be trusted to favorite">
+                <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                <span class="button-text">Add to favorites</span>
+            </button>
+        {/if}
+
+        {#if (audio.user?.id === user.id && audio.editCount < 3) || user.isAdmin}
+            <a href="/audio/{audio.id}/edit" class="edit-link-button" aria-label="Edit audio">
+                <svg class="edit-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                <span class="button-text">Edit</span>
+            </a>
+        {/if}
+    {/if}
+    
+    {#if showShare}
+        <button 
+            type="button" 
+            class="share-button"
+            on:click={handleShare}
+            aria-label="Share this audio"
+        >
+            <svg class="share-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="18" cy="5" r="3"></circle>
+                <circle cx="6" cy="12" r="3"></circle>
+                <circle cx="18" cy="19" r="3"></circle>
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+            <span class="button-text">Share</span>
+        </button>
+        {#if shareAnnounced}
+            <span class="share-feedback" role="status">Link copied!</span>
+        {/if}
+    {/if}
+</div>
+
+<style>
+    .audio-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .audio-actions.compact {
+        gap: 8px;
+    }
+
+    .favorites-count {
+        font-weight: 500;
+        color: #666;
+    }
+
+    .action-form {
+        display: inline;
+    }
+
+    .favorite-button,
+    .share-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+        color: #666;
+        font-size: 14px;
+        transition: all 0.2s ease;
+    }
+
+    .favorite-button:hover:not(.disabled),
+    .share-button:hover {
+        border-color: #007bff;
+        color: #007bff;
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+
+    .favorite-button:hover:not(.disabled) {
+        border-color: #ff6b6b;
+        color: #ff6b6b;
+        background-color: rgba(255, 107, 107, 0.1);
+    }
+
+    .favorite-button.favorited {
+        color: #ff6b6b;
+        border-color: #ff6b6b;
+        background-color: rgba(255, 107, 107, 0.1);
+    }
+
+    .favorite-button.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .heart-icon,
+    .share-icon,
+    .edit-icon {
+        flex-shrink: 0;
+    }
+
+    .edit-link-button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid #ccc;
+        background: transparent;
+        color: #333;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .edit-link-button:hover {
+        background: #f0f0f0;
+        border-color: #999;
+    }
+
+    .share-feedback {
+        font-size: 12px;
+        color: #28a745;
+        animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .compact .button-text {
+        display: none;
+    }
+
+    .compact .favorite-button,
+    .compact .share-button,
+    .compact .edit-link-button {
+        padding: 6px;
+    }
+
+    /* Dark variant for quickfeed */
+    .dark {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .dark .button-text {
+        display: none;
+    }
+
+    .dark .favorite-button,
+    .dark .share-button,
+    .dark .edit-link-button {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        padding: 0;
+    }
+
+    .dark .favorite-button:hover:not(.disabled),
+    .dark .share-button:hover,
+    .dark .edit-link-button:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: scale(1.1);
+        border: none;
+    }
+
+    .dark .favorite-button.favorited {
+        background: rgba(255, 107, 107, 0.3);
+        color: white;
+        border: none;
+    }
+
+    .dark .heart-icon,
+    .dark .share-icon,
+    .dark .edit-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .dark .favorites-count {
+        color: white;
+        font-size: 0.8rem;
+        margin-top: 0.2rem;
+    }
+</style>

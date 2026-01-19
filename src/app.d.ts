@@ -21,7 +21,10 @@
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
+		interface Locals {
+			user: import("$lib/server/database/models/user").default | null;
+			isFromAi: boolean;
+		}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

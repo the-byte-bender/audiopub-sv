@@ -17,9 +17,11 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 import fs from "fs/promises";
+import { createReadStream } from "node:fs";
 import { dev } from "$app/environment";
 import type { RequestHandler } from "./$types";
 import { error } from "@sveltejs/kit";
+import Mime from "mime-types";
 
 // WARNING! WARNING! WARNING!
 // This endpoint should never ever ever ever ever be modified to let it be used in production.
@@ -40,11 +42,60 @@ export const GET: RequestHandler = async (event) => {
   }
   const path = `./audio/${id}`;
   try {
-    const file = await fs.readFile(path);
-    return new Response(file, {
+    const stat = await fs.stat(path);
+    const size = stat.size;
+
+    const rangeHeader = event.request.headers.get("range");
+    const contentType = (Mime.lookup(id) || "application/octet-stream").toString();
+
+    // No range header: return full file
+    if (!rangeHeader) {
+      return new Response(createReadStream(path) as any, {
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": size.toString(),
+          "Accept-Ranges": "bytes",
+        },
+      });
+    }
+
+    // Range request: bytes=start-end
+    const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim());
+    if (!match) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          "Content-Range": `bytes */${size}`,
+          "Accept-Ranges": "bytes",
+        },
+      });
+    }
+
+    let start = match[1] ? parseInt(match[1], 10) : 0;
+    let end = match[2] ? parseInt(match[2], 10) : size - 1;
+
+    if (isNaN(start) || isNaN(end) || start < 0 || end < 0 || start > end) {
+      return new Response(null, {
+        status: 416,
+        headers: {
+          "Content-Range": `bytes */${size}`,
+          "Accept-Ranges": "bytes",
+        },
+      });
+    }
+
+    // Clamp within file
+    start = Math.min(start, size - 1);
+    end = Math.min(end, size - 1);
+    const chunkSize = end - start + 1;
+
+    return new Response(createReadStream(path, { start, end }) as any, {
+      status: 206,
       headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Length": file.byteLength.toString(),
+        "Content-Type": contentType,
+        "Content-Length": chunkSize.toString(),
+        "Content-Range": `bytes ${start}-${end}/${size}`,
+        "Accept-Ranges": "bytes",
       },
     });
   } catch (e) {

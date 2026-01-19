@@ -28,8 +28,8 @@ import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
 import sendEmail from "$lib/server/email";
-import { json, Op, Sequelize } from "sequelize";
-import { Json } from "sequelize/lib/utils";
+import { Op, Sequelize } from "sequelize";
+import { createCommentWithNotifications, validateCommentContent } from "$lib/server/interactions";
 
 export const load: PageServerLoad = async (event) => {
   // Query 1: Get audio with user
@@ -38,13 +38,20 @@ export const load: PageServerLoad = async (event) => {
     return error(404, "Not found");
   }
 
+  // Visibility check: Filter audios by { isTrusted: true } unless user is admin or owner
+  const isAdmin = event.locals.user?.isAdmin;
+  const isOwner = event.locals.user?.id === audio.userId;
+  if (audio.user && !audio.user.isTrusted && !isAdmin && !isOwner) {
+    throw error(403, "This audio is from an untrusted user and is not visible yet.");
+  }
+
   const comments = await Comment.findAll({
     where: { audioId: audio.id },
     include: {
       model: User,
       where: event.locals.user?.isAdmin ? {} : { isTrusted: true },
     },
-    // order: [["createdAt", "ASC"]],
+    order: [["createdAt", "ASC"]],
   });
 
   if (event.locals.user) {
@@ -136,63 +143,69 @@ export const actions: Actions = {
     const user = event.locals.user;
     const audio = await Audio.findByPk(event.params.id, { include: User });
     if (!audio) {
-      return error(404, "Not found");
+      return fail(404, { message: "Audio not found" });
     }
     if (!user || (!user.isAdmin && user.id !== audio.userId)) {
-      return error(403, "Forbidden");
+      return fail(403, {
+        message: "You do not have permission to delete this audio.",
+      });
     }
-    await fs.unlink(audio.path);
-    await audio.destroy();
+    try {
+      await fs.unlink(audio.path);
+    } catch (err) {
+      console.warn(`Could not delete audio file ${audio.path}:`, err);
+    }
+    try {
+      await fs.unlink(audio.transcodedPath);
+    } catch (err) {}
+    try {
+      await audio.destroy();
+    } catch (err) {
+      console.error(`Could not delete audio record ${audio.id}:`, err);
+      return fail(500, {
+        message:
+          "Could not delete audio from database. It might have comments or other dependencies.",
+      });
+    }
     return redirect(303, "/");
   },
   add_comment: async (event) => {
     const user = event.locals.user;
-    if (!user || !user.isVerified || user.isBanned) {
-      return error(403, "Forbidden");
-    }
+    const formData = await event.request.formData();
+    const parentId = formData.get("parentId") as string | null;
+    const comment = formData.get("comment") as string;
 
-    const audio = await Audio.findByPk(event.params.id);
-    if (!audio) {
-      return error(404, "Not found");
+    if (!user) {
+      return fail(401, { comment, parentId, message: "Unauthorized" });
     }
-
-    const form = await event.request.formData();
-    const parentId = form.get("parentId") as string | null;
-    const comment = form.get("comment") as string;
-    if (!comment) {
-      return fail(400, { comment });
-    }
-    if (comment.length < 3 || comment.length > 4000) {
-      return fail(400, {
+    if (!user.isVerified) {
+      return fail(403, {
         comment,
-        message: "Comment must be between 3 and 4000 characters",
+        parentId,
+        message: "Please verify your email first.",
       });
     }
+    if (user.isBanned) {
+      return fail(403, { comment, parentId, message: "You are banned" });
+    }
 
-    const commentInDatabase = await Comment.create({
-      userId: user.id,
-      audioId: audio.id,
-      parentId,
+    const validation = validateCommentContent(comment);
+    if (!validation.valid) {
+      return fail(400, { comment, parentId, message: validation.error });
+    }
+
+    const result = await createCommentWithNotifications({
+      user,
+      audioId: event.params.id,
       content: comment,
+      parentId,
     });
 
-    // Send notifications to followers
-    const followers = await AudioFollow.findAll({
-      where: { audioId: audio.id } as any,
-    });
-    const followerIds = new Set<string>(followers.map((f) => f.userId));
-    if (audio.userId) followerIds.add(audio.userId);
-    followerIds.delete(user.id);
-    const payloads = Array.from(followerIds).map((uid) => ({
-      userId: uid,
-      actorId: user.id,
-      type: "comment" as const,
-      targetType: "comment" as const,
-      targetId: commentInDatabase.id,
-      metadata: { audioId: audio.id },
-    }));
-    if (payloads.length) {
-      await Notification.bulkCreate(payloads as any);
+    if (!result.success) {
+      if (result.error === "Audio not found") {
+        return fail(404, { comment, parentId, message: result.error });
+      }
+      return fail(500, { comment, parentId, message: result.error });
     }
 
     return { success: true };
@@ -205,7 +218,9 @@ export const actions: Actions = {
     });
 
     if (!parentComment) {
-      return error(404, "The comment you are replying to was not found");
+      return fail(404, {
+        message: "The comment you are replying to was not found",
+      });
     }
     return {
       replyTo: parentComment.toClientside(false),
@@ -217,17 +232,19 @@ export const actions: Actions = {
     const form = await event.request.formData();
     const commentId = form.get("id") as string;
     if (!commentId) {
-      return fail(400);
+      return fail(400, { message: "Comment ID is required" });
     }
 
     const comment = await Comment.findByPk(commentId, { include: User });
     if (!comment) {
-      return error(404, "Not found");
+      return fail(404, { message: "Comment not found" });
     }
 
     // You must be an admin or the comment owner to delete
     if (!user || (!user.isAdmin && user.id !== comment.userId)) {
-      return error(403, "Forbidden");
+      return fail(403, {
+        message: "You do not have permission to delete this comment.",
+      });
     }
 
     // We should be able to use mixin methods here, but even after declaring their types

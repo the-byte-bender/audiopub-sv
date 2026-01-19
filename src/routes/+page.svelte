@@ -58,7 +58,7 @@
 
 <h1>Welcome to Audiopub</h1>
 
-<form method="GET" action="/">
+<form method="GET" action="/" aria-label="Sort audio list">
     <label for="sort">Sort by:</label>
     <select name="sort" id="sort">
         <option value="createdAt" selected={data.sortField === "createdAt"}
@@ -99,6 +99,5 @@
     audios={data.audios}
     page={data.page}
     totalPages={data.totalPages}
-    currentUser={data.user}
     paginationBaseUrl={`/?sort=${data.sortField}${data.sortField === "random" ? "" : "&order=" + data.sortOrder}`}
 />

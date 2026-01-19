@@ -17,11 +17,10 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-    import type { ClientsideAudio, ClientsideUser } from "$lib/types";
+    import type { ClientsideAudio } from "$lib/types";
     import SafeMarkdown from "./safe_markdown.svelte";
 
     export let audio: ClientsideAudio;
-    export let currentUser: ClientsideUser | null = null;
 
     $: favoritesString = (() => {
         const count = audio.favoriteCount || 0;
@@ -41,7 +40,7 @@
     </h3>
     {#if audio.user}
         <p>
-            By <a href={`/user/${audio.user.id}`}>{audio.user.displayName}</a>
+            By <a href={`/@${audio.user.name}`}>{audio.user.displayName}</a>
         </p>
     {/if}
     <SafeMarkdown source={audio.description} />

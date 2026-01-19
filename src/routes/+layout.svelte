@@ -21,6 +21,7 @@
     import title from "$lib/title";
     import { onDestroy, onMount } from "svelte";
     import type { LayoutData } from "./$types";
+    import Dialog from "$lib/components/dialog.svelte";
 
     export let data: LayoutData;
 
@@ -97,14 +98,18 @@
     });
 </script>
 
-<svelte head>
+<svelte:head>
     <title
         >{unreadCount > 0 ? `(${unreadCount}) ` : ""}{$title} | audiopub</title
     >
-</svelte>
+</svelte:head>
+
+<Dialog />
+
+<a href="#main-content" class="skip-to-content">Skip to main content</a>
 
 <header>
-    <nav>
+    <nav aria-label="Main navigation">
         <a href="/">Home</a>
         <a href="/quickfeed">Quickfeed</a>
         {#if data.user}
@@ -135,12 +140,18 @@
             <a href="/register">Register</a>
         {/if}
     </nav>
-    <form action="/search" method="get">
-        <input type="text" name="q" placeholder="Search..." />
+    <form action="/search" method="get" role="search">
+        <input
+            type="text"
+            name="q"
+            placeholder="Search..."
+            minlength="3"
+            required
+        />
         <button type="submit">Search</button>
     </form>
 </header>
-<main>
+<main id="main-content">
     <slot />
 </main>
 
@@ -168,6 +179,22 @@
 </footer>
 
 <style>
+    .skip-to-content {
+        position: absolute;
+        left: -9999px;
+        z-index: 999;
+        padding: 1em;
+        background-color: #000;
+        color: white;
+        text-decoration: none;
+        border-radius: 0 0 4px 0;
+    }
+
+    .skip-to-content:focus {
+        left: 0;
+        top: 0;
+    }
+
     header {
         background-color: #f0f0f0;
         padding: 20px;
@@ -209,8 +236,6 @@
 
     main {
         padding: 20px;
-        /* Account for sticky header - approximate height is 80px (40px padding + ~40px content) */
-        padding-top: calc(20px + 80px);
     }
 
     footer {

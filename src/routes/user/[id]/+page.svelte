@@ -18,14 +18,72 @@
 -->
 <script lang="ts">
     import { enhance } from "$app/forms";
+    import { browser } from "$app/environment";
     import AudioList from "$lib/components/audio_list.svelte";
+    import SafeMarkdown from "$lib/components/safe_markdown.svelte";
     import title from "$lib/title.js";
+    import { announceToScreenReader } from "$lib/utils";
     import { onMount } from "svelte";
+    import type { ActionData } from "./$types";
+
     export let data;
+    export let form: ActionData;
+
+    let shareAnnounced = false;
+
     onMount(() => title.set(`${data.profileUser.displayName}'s Profile`));
+
+    async function handleShare() {
+        if (!browser) return;
+
+        const url = `${window.location.origin}/@${data.profileUser.name}`;
+        const shareData = {
+            title: `${data.profileUser.displayName}'s Profile - Audiopub`,
+            text: `Check out ${data.profileUser.displayName}'s profile on Audiopub!`,
+            url,
+        };
+
+        try {
+            if (navigator.share) {
+                await navigator.share(shareData);
+                announceToScreenReader("Shared successfully");
+            } else if (navigator.clipboard) {
+                await navigator.clipboard.writeText(url);
+                announceToScreenReader("Link copied to clipboard");
+                shareAnnounced = true;
+                setTimeout(() => { shareAnnounced = false; }, 2000);
+            }
+        } catch (err) {
+            if ((err as Error).name !== 'AbortError') {
+                console.error('Share failed:', err);
+            }
+        }
+    }
 </script>
 
-<h1>{data.profileUser.displayName}'s Profile</h1>
+<header class="profile-header">
+    <h1>{data.profileUser.displayName}'s Profile</h1>
+    <button class="share-button" on:click={handleShare} aria-label="Share profile">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+            <polyline points="16 6 12 2 8 6"></polyline>
+            <line x1="12" y1="2" x2="12" y2="15"></line>
+        </svg>
+        <span>{shareAnnounced ? 'Link Copied!' : 'Share Profile'}</span>
+    </button>
+</header>
+
+{#if data.user && data.user.id === data.profileUser.id}
+    <p class="edit-profile-notice">
+        You can edit your profile at <a href="/profile">settings</a>.
+    </p>
+{/if}
+
+{#if form?.message}
+    <div class="error-message" role="alert">
+        {form.message}
+    </div>
+{/if}
 
 <table>
     <tbody>
@@ -43,6 +101,20 @@
         </tr>
     </tbody>
 </table>
+
+<div class="bio-section">
+    <div class="bio-header">
+        <h2>Bio</h2>
+    </div>
+
+    <div class="bio-content">
+        {#if data.profileUser.bio}
+            <SafeMarkdown source={data.profileUser.bio} />
+        {:else}
+            <p><i>No bio provided.</i></p>
+        {/if}
+    </div>
+</div>
 
 {#if data.isAdmin}
     {#if !data.profileUser.isTrusted}
@@ -82,10 +154,20 @@
     groupThreshold={0}
     page={data.page}
     totalPages={data.totalPages}
-    paginationBaseUrl={`/user/${data.profileUser.id}`}
+    paginationBaseUrl={`/@${data.profileUser.name}`}
 />
 
 <style>
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+
     details {
         border: 1px solid #ddd;
         border-radius: 4px;
@@ -126,5 +208,74 @@
 
     button:hover {
         background-color: #444;
+    }
+
+    .edit-profile-notice {
+        background-color: #e7f3ff;
+        border: 1px solid #b2d4ff;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        font-size: 0.95rem;
+    }
+
+    .edit-profile-notice a {
+        font-weight: bold;
+        color: #0056b3;
+    }
+
+    .bio-section {
+        margin: 2rem 0;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background-color: #fcfcfc;
+    }
+
+    .bio-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .bio-header h2 {
+        margin: 0;
+    }
+
+    .bio-content {
+        line-height: 1.6;
+    }
+
+    .profile-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .profile-header h1 {
+        margin: 0;
+    }
+
+    .share-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background-color: #f0f0f0;
+        color: #333;
+        border: 1px solid #ccc;
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .share-button:hover {
+        background-color: #e0e0e0;
+    }
+
+    .share-button svg {
+        flex-shrink: 0;
     }
 </style>

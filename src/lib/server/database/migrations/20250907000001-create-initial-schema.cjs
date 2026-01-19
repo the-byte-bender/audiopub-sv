@@ -52,7 +52,7 @@ module.exports = {
       isTrusted: {
         type: Sequelize.BOOLEAN,
         allowNull: false,
-        defaultValue: true
+        defaultValue: false
       },
       isAdmin: {
         type: Sequelize.BOOLEAN,

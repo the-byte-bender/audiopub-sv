@@ -24,76 +24,73 @@
     import CommentList from "$lib/components/comment_list.svelte";
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
-  import type { ClientsideComment } from "$lib/types.js";
+    import { dialog } from "$lib/stores/dialog";
+    import AudioPlayer from "$lib/components/audio_player.svelte";
+    import AudioActions from "$lib/components/audio_actions.svelte";
+    import { registerPlay } from "$lib/utils";
+    import type { ClientsideComment } from "$lib/types.js";
 
 export let form: any;
 
     onMount(() => title.set(data.audio.title));
-    const handlePlay = () => {
-        fetch(`/listen/${data.audio.id}/try_register_play`, { method: "POST" });
+    
+    let hasRegisteredPlay = false;
+    const handleTimeUpdate = (e: CustomEvent<{currentTime: number, duration: number}>) => {
+        if (!hasRegisteredPlay) {
+            registerPlay(data.audio.id, e.detail.currentTime, e.detail.duration).then(success => {
+                if (success) hasRegisteredPlay = true;
+            });
+        }
     };
-
-    $: favoritesString = (() => {
-        const count = data.audio.favoriteCount || 0;
-        if (count === 0) return "No favorites";
-        if (count === 1) return "1 favorite";
-        return `${count} favorites`;
-    })();
 
     let commentField: HTMLTextAreaElement;
     function onReply(comment: ClientsideComment) {
 commentField.focus();
     }
+
+    let deleteAudioForm: HTMLFormElement;
+
+    async function handleDeleteAudio() {
+        const confirmed = await dialog.confirm({
+            title: "Delete audio?",
+            message: "Are you sure you want to permanently delete this audio? This action cannot be undone.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            danger: true
+        });
+
+        if (confirmed && deleteAudioForm) {
+            deleteAudioForm.submit();
+        }
+    }
 </script>
 
 <h1>{data.audio.title}</h1>
 
-<div class="audio-player">
-    <audio controls id="player" on:play={handlePlay} autofocus>
-        <source src="/{data.audio.path}" type={data.mimeType} />
-        <source src="/{data.audio.transcodedPath}" type="audio/aac" />
-        <p>Your browser doesn't support the audio element.</p>
-    </audio>
-    <a
-        href="/{data.audio.path}"
-        download={data.audio.title +
-            (data.audio.extension.startsWith(".")
-                ? data.audio.extension
-                : "." + data.audio.extension)}
-    >
-        Download
-    </a>
-</div>
+<AudioPlayer 
+    sources={[
+        { src: `/${data.audio.path}`, type: data.mimeType },
+        { src: `/${data.audio.transcodedPath}`, type: 'audio/aac' }
+    ]}
+    title={data.audio.title}
+    downloadUrl={`/${data.audio.path}`}
+    downloadFilename={data.audio.title + (data.audio.extension.startsWith(".") ? data.audio.extension : "." + data.audio.extension)}
+    on:timeupdate={handleTimeUpdate}
+/>
 
 <div class="audio-details">
+    {#if form?.message && !form?.comment}
+        <div class="error-message" role="alert">
+            {form.message}
+        </div>
+    {/if}
     <div class="audio-stats">
         <span>{data.audio.playsString}</span>
-        <span>{favoritesString}</span>
-{#if data.user}
-            {#if data.audio.isFavorited}
-                <form use:enhance action="?/unfavorite" method="POST">
-                    <button type="submit" class="favorite-button favorited">
-                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        Remove from favorites
-                    </button>
-                </form>
-            {:else}
-                <form use:enhance action="?/favorite" method="POST">
-                    <button type="submit" class="favorite-button">
-                        <svg class="heart-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        Add to favorites
-                    </button>
-                </form>
-            {/if}
-        {/if}
+        <AudioActions audio={data.audio} user={data.user} />
     </div>
     {#if data.audio.user}
         <p>
-            Uploaded by: <a href="/user/{data.audio.user.id}"
+            Uploaded by: <a href="/@{data.audio.user.name}"
                 >{data.audio.user.name}</a
             >
         </p>
@@ -122,25 +119,11 @@ commentField.focus();
     {/if}
 
     {#if data.user && (data.isAdmin || data.user.id === data.audio.user?.id)}
-        <form
-            use:enhance={({
-                formElement,
-                formData,
-                action,
-                cancel,
-                submitter,
-            }) => {
-                if (!confirm("Are you sure you want to delete this audio?")) {
-                    cancel();
-                }
-            }}
-            action="?/delete"
-            method="POST"
-        >
-            <button type="submit"> Permanently delete</button>
+        <form bind:this={deleteAudioForm} action="?/delete" method="POST">
+            <button type="button" on:click={handleDeleteAudio}> Permanently delete</button>
         </form>
     {/if}
-<section role="group" aria-label="Comments">
+<section aria-label="Comments">
   <h2>Comments</h2>
   {#if data.comments.length > 0}
     <CommentList
@@ -162,15 +145,21 @@ commentField.focus();
                 until it's reviewed.
             </p>
         {/if}
-        <form use:enhance action="?/add_comment" method="POST">
+        <form use:enhance action="?/add_comment" method="POST" aria-label="Add a comment">
+            {#if form?.message}
+                <p class="error-message" role="alert">{form.message}</p>
+            {/if}
             {#if form?.replyTo}
             <input type="hidden" name="parentId" value={form.replyTo.id} />
             <label for="comment">Reply to @{form.replyTo.user.name}:</label>
+            {:else if form?.parentId}
+            <input type="hidden" name="parentId" value={form.parentId} />
+            <label for="comment">Reply (ID: {form.parentId}):</label>
             {:else}
             <label for="comment">Add a comment:</label>
             {/if}
-            <textarea bind:this={commentField} name="comment" id="comment" required maxlength="4000"></textarea>
-            <button type="submit">{form?.replyTo ? 'Reply' : 'Comment'}</button>
+            <textarea bind:this={commentField} name="comment" id="comment" required maxlength="4000">{form?.comment ?? ""}</textarea>
+            <button type="submit">{form?.replyTo || form?.parentId ? 'Reply' : 'Comment'}</button>
         </form>
     {/if}
 </div>
@@ -181,27 +170,6 @@ commentField.focus();
         text-align: center;
         margin-bottom: 1rem;
         color: #333;
-    }
-
-    /* Styling for the audio player section */
-    .audio-player {
-        margin-bottom: 1rem;
-    }
-
-    /* Styling for the audio controls */
-    audio {
-        width: 100%;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Styling for the download link */
-    .audio-player a {
-        display: block;
-        text-align: center;
-        margin-top: 0.5rem;
-        color: #007bff;
-        text-decoration: none;
-        font-weight: bold;
     }
 
     /* Styling for the audio details section */
@@ -225,41 +193,20 @@ commentField.focus();
         color: #666;
     }
 
-    /* Favorite button styling */
-    .favorite-button {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        background: none;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 4px 8px;
-        cursor: pointer;
-        color: #666;
-        font-size: 14px;
-        transition: all 0.2s ease;
-    }
-
-    .favorite-button:hover {
-        border-color: #ff6b6b;
-        color: #ff6b6b;
-        background-color: rgba(255, 107, 107, 0.1);
-    }
-
-    .favorite-button.favorited {
-        color: #ff6b6b;
-        border-color: #ff6b6b;
-        background-color: rgba(255, 107, 107, 0.1);
-    }
-
-    .favorite-button .heart-icon {
-        flex-shrink: 0;
-    }
-
     /* Styling for the uploaded by link */
     .audio-details a {
         color: #007bff;
         text-decoration: none;
+    }
+
+    .error-message {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        text-align: center;
     }
 
     /* Styling for the description section */
@@ -313,7 +260,7 @@ commentField.focus();
         background-color: #0056b3;
     }
 
-      section[role="group"] {
+  section {
     margin-top: 1rem;
     padding: 1rem;
     background-color: #f9f9f9;
@@ -321,13 +268,13 @@ commentField.focus();
     border-radius: 8px;
   }
 
-  section[role="group"] h2 {
+  section h2 {
     color: #333;
     font-size: 1.5rem;
     margin-bottom: 1rem;
   }
 
-    section[role="group"] p {
+  section p {
     margin-top: 1rem;
     color: #888;
   }

@@ -17,24 +17,40 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
-          import { formatRelative } from "date-fns";
-  import type { ClientsideComment, ClientsideUser } from "$lib/types";
-  import Modal from "./modal.svelte";
-  import { enhance } from "$app/forms";
-  import SafeMarkdown from "./safe_markdown.svelte";
-  import { updated } from "$app/state";
-  import CommentList from "./comment_list.svelte";
+    import { formatRelative } from "date-fns";
+    import type { ClientsideComment, ClientsideUser } from "$lib/types";
+    import { enhance } from "$app/forms";
+    import SafeMarkdown from "./safe_markdown.svelte";
+    import { dialog } from "$lib/stores/dialog";
+    import CommentList from "./comment_list.svelte";
 
-  export let comment: ClientsideComment;
-  export let user: ClientsideUser | undefined = undefined;
-  export let isAdmin: boolean = false;
-  export let onReply: ((comment: ClientsideComment) => void) = comment => {};
-  let isDeletionModalVisible: boolean = false;
-  let replyDisabled: boolean = false;
+    export let comment: ClientsideComment;
+    export let user: ClientsideUser | undefined = undefined;
+    export let isAdmin: boolean = false;
+    export let onReply: ((comment: ClientsideComment) => void) = comment => {};
+    let replyDisabled: boolean = false;
+    let deleteDisabled: boolean = false;
 
-  $: commentDate = comment
-    ? formatRelative(new Date(comment.createdAt), new Date())
-    : "";
+    $: commentDate = comment
+        ? formatRelative(new Date(comment.createdAt), new Date())
+        : "";
+
+    async function handleDeleteComment() {
+        const confirmed = await dialog.confirm({
+            title: "Delete comment?",
+            message: `Are you sure you want to delete this comment? This action cannot be undone.\n\nComment: "${comment.content.substring(0, 100)}${comment.content.length > 100 ? '...' : ''}"`,
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            danger: true
+        });
+
+        if (confirmed) {
+            const form = document.getElementById(`delete-comment-form-${comment.id}`) as HTMLFormElement;
+            if (form) {
+                form.requestSubmit();
+            }
+        }
+    }
 </script>
 
 <div class="comment">
@@ -43,12 +59,12 @@
       <span style="color: red">(Pending review)</span> |{" "}
     {/if}
 
-    <a href={`/user/${comment.user.id}`}>{comment.user.displayName}</a>
+    <a href={`/@${comment.user.name}`}>{comment.user.displayName}</a>
     <span class="comment-date"> - {commentDate}</span>
   </h3>
   <SafeMarkdown source={comment.content} />
 
-  <div id="comment-actions">
+  <div class="comment-actions">
     {#if user}
       <form method="post" action="?/reply_to_comment" use:enhance={() => {
         replyDisabled = true;
@@ -64,25 +80,22 @@
     {/if}
 
     {#if isAdmin || (user && user.id === comment.user.id)}
-      <button on:click={() => (isDeletionModalVisible = true)}>Delete</button>
-      <Modal bind:visible={isDeletionModalVisible}>
-        <h2>Delete this comment?</h2>
-        <p>Are you sure? This action cannot be undone.</p>
-        <p>Comment content:</p>
-        <pre>{comment.content}</pre>
-        <button on:click={() => (isDeletionModalVisible = false)}>Cancel</button
-        >
-        <form action="?/delete_comment" method="post"
+      <form
+        id={`delete-comment-form-${comment.id}`}
+        method="post"
+        action="?/delete_comment"
         use:enhance={() => {
+          deleteDisabled = true;
           return async ({ update }) => {
             await update();
-            isDeletionModalVisible = false; // close modal after deletion
+            deleteDisabled = false;
           };
-        }}>
-          <input type="hidden" name="id" value={comment.id} />
-          <button type="submit">Confirm delete</button>
-        </form>
-      </Modal>
+        }}
+        style="display: none;"
+      >
+        <input type="hidden" name="id" value={comment.id} />
+      </form>
+      <button on:click={handleDeleteComment} disabled={deleteDisabled}>Delete</button>
     {/if}
   </div>
 </div>
@@ -111,15 +124,7 @@
     margin-left: 0.5em;
   }
 
-  .comment pre {
-    white-space: pre-wrap;
-    background-color: #fff;
-    padding: 0.5rem;
-    border: none;
-    margin-top: 0.5rem;
-  }
-
-  .comment #comment-actions {
+  .comment .comment-actions {
     margin-top: 0.5rem;
     display: flex;
     gap: 0.5rem;
@@ -129,7 +134,7 @@
 
   /* prevent direct child forms inside the actions area from adding extra vertical spacing
      (this avoids changing layouts inside nested components like the Modal) */
-  .comment #comment-actions > form {
+  .comment .comment-actions > form {
     margin: 0;
   }
 </style>
