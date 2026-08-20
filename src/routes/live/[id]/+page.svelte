@@ -28,6 +28,7 @@
     import { fade, slide } from "svelte/transition";
     import { enhance } from "$app/forms";
     import title from "$lib/title";
+    import { streamListenUrl } from "$lib/streaming_config";
     import type {
         ClientsideStreamChat,
         ClientsideStreamMute,
@@ -249,7 +250,7 @@
         const IcecastMetadataPlayer = (await import("icecast-metadata-player"))
             .default;
         player = new IcecastMetadataPlayer(
-            `https://live.audiopub.site/${data.stream.user?.id}`,
+            `${streamListenUrl}/${data.stream.user?.id}`,
             {
                 audioElement: audioEl,
                 playbackMethod: iOS() ? "html5" : undefined,

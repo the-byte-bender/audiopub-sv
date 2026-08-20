@@ -19,6 +19,10 @@
 <script lang="ts">
     import { enhance } from "$app/forms";
     import title from "$lib/title";
+    import {
+        streamIngestHost,
+        streamIngestPort,
+    } from "$lib/streaming_config";
     import { onMount } from "svelte";
 
     export let data;
@@ -27,9 +31,11 @@
 
     let showSensitiveInfo = false;
 
+    const ingestAddress = `${streamIngestHost}:${streamIngestPort}`;
+
     $: icecastUrl =
         data.user?.streamKey && showSensitiveInfo
-            ? `icecast://source:${data.user.streamKey}@live.audiopub.site:8000/${data.user.id}`
+            ? `icecast://source:${data.user.streamKey}@${ingestAddress}/${data.user.id}`
             : null;
 
     const placeholderKey = "<your-stream-key>";
@@ -97,12 +103,12 @@
     <dl>
         <dt>Server address</dt>
         <dd>
-            <code>live.audiopub.site</code>
+            <code>{streamIngestHost}</code>
         </dd>
 
         <dt>Port</dt>
         <dd>
-            <code>8000</code>
+            <code>{streamIngestPort}</code>
         </dd>
 
         <dt>Mount point</dt>
@@ -152,7 +158,7 @@
             <code class="sensitive full-url">{icecastUrl}</code>
         {:else}
             <code class="sensitive masked full-url">
-                icecast://source:{placeholderKey}@live.audiopub.site:8000/{placeholderUserId}
+                icecast://source:{placeholderKey}@{ingestAddress}/{placeholderUserId}
             </code>
         {/if}
     </p>
@@ -211,7 +217,7 @@
             <code class="sensitive full-url">{icecastUrl}</code>
         {:else}
             <code class="sensitive masked full-url">
-                icecast://source:{placeholderKey}@live.audiopub.site:8000/{placeholderUserId}
+                icecast://source:{placeholderKey}@{ingestAddress}/{placeholderUserId}
             </code>
         {/if}
     </p>
