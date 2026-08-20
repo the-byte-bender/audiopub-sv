@@ -45,6 +45,11 @@ if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is not defined");
 }
 
+const baseUrl = (process.env.BASE_URL || "https://audiopub.site").replace(
+    /\/+$/,
+    "",
+);
+
 export interface UserInfo {
     id: string;
     name: string;
@@ -232,7 +237,7 @@ export default class User extends Model {
     async generateResetPasswordToken() {
         this.resetPasswordToken = v4();
         await this.save();
-        const resetUrl = `https://audiopub.site/reset_password/${this.resetPasswordToken}`;
+        const resetUrl = `${baseUrl}/reset_password/${this.resetPasswordToken}`;
         // Send email.
         await sendEmail(
             this.email,
