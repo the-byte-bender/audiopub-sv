@@ -90,6 +90,15 @@ export default class Audio extends Model {
     @Column(DataType.BOOLEAN)
     declare isFromAi: boolean;
 
+    /**
+     * Admin-only notice. Announcements are pinned to the top of the upload
+     * page so uploaders see them before submitting anything.
+     */
+    @AllowNull(false)
+    @Default(false)
+    @Column(DataType.BOOLEAN)
+    declare isAnnouncement: boolean;
+
     @ForeignKey(() => User)
     @Column(DataType.UUID)
     declare userId: string;
@@ -180,6 +189,7 @@ export default class Audio extends Model {
             favoriteCount: favoriteCount ?? 0,
             isFavorited: isFavorited,
             createdAt: this.createdAt.getTime(),
+            isAnnouncement: this.isAnnouncement,
             user: includeUser ? this.user?.toClientside() : undefined,
         };
     }

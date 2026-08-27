@@ -161,8 +161,17 @@
 
 <h1>
     {data.audio.title}
+    {#if data.audio.isAnnouncement}<span class="announcement-tag"
+            >[announcement]</span
+        >{/if}
     {#if data.hasEdits}<span class="edited-tag">[edited]</span>{/if}
 </h1>
+
+{#if data.audio.isAnnouncement}
+    <p class="announcement-note" role="note">
+        This audio is pinned to the top of the upload page as an announcement.
+    </p>
+{/if}
 
 <div class="audio-player">
     <AudioPlayer
@@ -389,6 +398,25 @@
                 >
             </Modal>
         {/if}
+    {/if}
+
+    {#if data.isAdmin}
+        <form use:enhance action="?/setAnnouncement" method="POST">
+            <!-- A plain button that states the action it performs, rather
+                 than a checkbox the admin has to remember to save. -->
+            <input
+                type="hidden"
+                name="isAnnouncement"
+                value={data.audio.isAnnouncement ? "off" : "on"}
+            />
+            <button type="submit">
+                {#if data.audio.isAnnouncement}
+                    Unpin as announcement
+                {:else}
+                    Pin as announcement on the upload page
+                {/if}
+            </button>
+        </form>
     {/if}
 
     {#if data.user && (data.isAdmin || data.user.id === data.audio.user?.id)}
@@ -671,6 +699,22 @@
     .edited-tag {
         font-size: 0.65em;
         font-weight: normal;
+    }
+
+    .announcement-tag {
+        font-size: 0.65em;
+        font-weight: normal;
+        color: #856404;
+    }
+
+    .announcement-note {
+        margin: 0 auto 1rem;
+        max-width: 700px;
+        padding: 0.5rem 0.75rem;
+        background: #fff3cd;
+        border: 1px solid #ffeeba;
+        border-radius: 4px;
+        color: #856404;
     }
 
     .edit-form {

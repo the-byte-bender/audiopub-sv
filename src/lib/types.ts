@@ -70,6 +70,8 @@ export interface ClientsideAudio {
     favoriteCount: number;
     isFavorited?: boolean;
     createdAt: number;
+    /** Admin-authored notice pinned to the top of the upload page. */
+    isAnnouncement: boolean;
     user?: ClientsideUser;
     comments?: ClientsideComment[];
 }

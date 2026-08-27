@@ -20,15 +20,30 @@ import fs from "fs/promises";
 import path from "path";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
-import { Audio, Notification, Subscription } from "$lib/server/database";
+import { Audio, Notification, Subscription, User } from "$lib/server/database";
 import transcode from "$lib/server/transcode";
 import { NotificationTargetType, NotificationType } from "$lib/types";
 
-export const load: PageServerLoad = (event) => {
+export const load: PageServerLoad = async (event) => {
     const user = event.locals.user;
     if (!user) {
         return redirect(303, "/login");
     }
+
+    // Admin notices are pinned above the form so uploaders read them before
+    // submitting anything.
+    const announcements = await Audio.findAll({
+        where: { isAnnouncement: true, hasFile: true },
+        include: [User],
+        order: [["createdAt", "DESC"]],
+    });
+
+    return {
+        announcements: announcements.map((audio) => ({
+            ...audio.toClientside(),
+            mimeType: audio.mimeType,
+        })),
+    };
 };
 
 export const actions: Actions = {
@@ -59,6 +74,9 @@ export const actions: Actions = {
         const file = form.get("file") as File;
         const title = form.get("title") as string;
         const description = form.get("description") as string;
+        // Only admins may pin an audio; the checkbox is not rendered for others
+        // and is ignored here even if it is forged.
+        const isAnnouncement = user.isAdmin && form.get("isAnnouncement") === "on";
         if (!file) {
             return fail(400, { title, description });
         }
@@ -81,6 +99,7 @@ export const actions: Actions = {
             hasFile: true,
             userId: user.id,
             extension: path.extname(file.name),
+            isAnnouncement,
         });
         await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
         transcode(audio.path).catch(async (err) => {

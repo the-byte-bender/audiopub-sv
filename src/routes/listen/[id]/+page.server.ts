@@ -297,6 +297,22 @@ export const actions: Actions = {
 
         return { editSuccess: true };
     },
+    setAnnouncement: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isAdmin) {
+            return error(403, "Forbidden");
+        }
+        const audio = await Audio.findByPk(event.params.id);
+        if (!audio) {
+            return error(404, "Not found");
+        }
+        const form = await event.request.formData();
+        // The button posts the state it wants, so the action stays idempotent
+        // and a double submit cannot flip it back.
+        audio.isAnnouncement = form.get("isAnnouncement") === "on";
+        await audio.save();
+        return { announcementSuccess: true };
+    },
     delete: async (event) => {
         const user = event.locals.user;
         const audio = await Audio.findByPk(event.params.id, { include: User });
