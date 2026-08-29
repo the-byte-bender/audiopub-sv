@@ -45,8 +45,6 @@ export const GET: RequestHandler = async (event) => {
         return new Response(null, { status: 204 });
     }
 
-    streamingService.listenerConnected(stream.id);
-
     const encoder = new TextEncoder();
 
     const onStateChanged = (data: StreamStateChangedEvent) => {
@@ -59,6 +57,7 @@ export const GET: RequestHandler = async (event) => {
                 } catch {
                     /* already closed */
                 }
+                cleanup();
             }
         }
     };
@@ -105,11 +104,32 @@ export const GET: RequestHandler = async (event) => {
 
     let controllerRef: ReadableStreamDefaultController | null = null;
 
+    const listener = {};
+
     function send(eventName: string, data: unknown) {
         if (!controllerRef) return;
         const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
-        controllerRef.enqueue(encoder.encode(payload));
+        try {
+            controllerRef.enqueue(encoder.encode(payload));
+        } catch {
+            controllerRef = null;
+            cleanup();
+        }
     }
+
+    // A client can go away without cancel() firing, so everything that notices
+    // ends up here. Calling it more than once is harmless
+    const cleanup = () => {
+        clearInterval(keepalive ?? undefined);
+        keepalive = null;
+        streamingService.off(STREAM_STATE_CHANGED, onStateChanged);
+        streamingService.off(STREAM_LISTENERS_CHANGED, onListenersChanged);
+        streamingService.off(STREAM_CHAT_SENT, onChatSent);
+        streamingService.off(STREAM_CHAT_DELETED, onChatDeleted);
+        streamingService.off(STREAM_ARCHIVED, onArchived);
+        streamingService.off(STREAM_MODERATION_CHANGED, onModerationChanged);
+        streamingService.listenerDisconnected(stream.id, listener);
+    };
 
     const stream2 = new ReadableStream({
         start(controller) {
@@ -129,26 +149,22 @@ export const GET: RequestHandler = async (event) => {
             streamingService.on(STREAM_ARCHIVED, onArchived);
             streamingService.on(STREAM_MODERATION_CHANGED, onModerationChanged);
 
+            streamingService.listenerConnected(stream.id, listener);
+
             keepalive = setInterval(() => {
                 try {
                     controllerRef?.enqueue(encoder.encode(": keepalive\n\n"));
                 } catch {
-                    clearInterval(keepalive ?? undefined);
-                    keepalive = null;
+                    cleanup();
                 }
             }, 30000);
         },
         cancel() {
-            clearInterval(keepalive ?? undefined);
-            streamingService.off(STREAM_STATE_CHANGED, onStateChanged);
-            streamingService.off(STREAM_LISTENERS_CHANGED, onListenersChanged);
-            streamingService.off(STREAM_CHAT_SENT, onChatSent);
-            streamingService.off(STREAM_CHAT_DELETED, onChatDeleted);
-            streamingService.off(STREAM_ARCHIVED, onArchived);
-            streamingService.off(STREAM_MODERATION_CHANGED, onModerationChanged);
-            streamingService.listenerDisconnected(stream.id);
+            cleanup();
         },
     });
+
+    event.request.signal.addEventListener("abort", cleanup);
 
     return new Response(stream2, {
         headers: {

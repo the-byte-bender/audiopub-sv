@@ -39,6 +39,7 @@ export class StreamingService extends EventEmitter {
     private icecastAdminPassword: string = "";
     private timer: ReturnType<typeof setInterval> | null = null;
     private archiveControllers: Map<string, AbortController> = new Map();
+    private streamListeners: Map<string, Set<object>> = new Map();
 
     constructor(pollIntervalMs: number = 5 * 60 * 1000) {
         super();
@@ -413,14 +414,34 @@ export class StreamingService extends EventEmitter {
         }
     }
 
-    async listenerConnected(streamId: string) {
+    async listenerConnected(streamId: string, listener: object) {
+        let listeners = this.streamListeners.get(streamId);
+        if (!listeners) {
+            listeners = new Set();
+            this.streamListeners.set(streamId, listeners);
+        }
+        if (listeners.has(listener)) return;
+        listeners.add(listener);
+
+        await this.publishListeners(streamId, listeners.size);
+    }
+
+    async listenerDisconnected(streamId: string, listener: object) {
+        const listeners = this.streamListeners.get(streamId);
+        if (!listeners?.delete(listener)) return;
+        if (listeners.size === 0) {
+            this.streamListeners.delete(streamId);
+        }
+
+        await this.publishListeners(streamId, listeners.size);
+    }
+
+    private async publishListeners(streamId: string, activeListeners: number) {
         await Stream.update(
             {
-                activeListeners: Stream.sequelize!.literal(
-                    "activeListeners + 1",
-                ),
+                activeListeners,
                 peekListeners: Stream.sequelize!.literal(
-                    "GREATEST(peekListeners, activeListeners + 1)",
+                    `GREATEST(peekListeners, ${activeListeners})`,
                 ),
             },
             { where: { id: streamId } },
@@ -436,32 +457,6 @@ export class StreamingService extends EventEmitter {
             updated.activeListeners,
             updated.peekListeners,
         );
-    }
-
-    async listenerDisconnected(streamId: string) {
-        const [updated] = await Stream.update(
-            {
-                activeListeners: Stream.sequelize!.literal(
-                    "activeListeners - 1",
-                ),
-            },
-            {
-                where: { id: streamId, activeListeners: { [Op.gt]: 0 } },
-            },
-        );
-
-        if (updated) {
-            const updatedStream = await Stream.findByPk(streamId, {
-                attributes: ["activeListeners", "peekListeners"],
-            });
-            if (updatedStream) {
-                this.notifyListenersChanged(
-                    streamId,
-                    updatedStream.activeListeners,
-                    updatedStream.peekListeners,
-                );
-            }
-        }
     }
 
     async disconnectSource(userId: string) {
