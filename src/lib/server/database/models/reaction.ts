@@ -1,7 +1,7 @@
 /*
  * This file is part of the audiopub project.
  *
- * Copyright (C) 2026 the-byte-bender
+ * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -26,58 +26,55 @@ import {
     Default,
     ForeignKey,
     BelongsTo,
+    Index,
+    Unique,
     CreatedAt,
     UpdatedAt,
 } from "sequelize-typescript";
 import User from "./user";
-import Stream from "./stream";
-import type { ClientsideStreamChat, ClientsideReaction } from "$lib/types";
+import { ReactionTargetType } from "$lib/types";
 
+/**
+ * A single reaction left by a user. Reactions are polymorphic: the same table
+ * backs comment reactions and stream chat reactions, discriminated by
+ * `targetType`. A user may only hold one reaction per target at a time;
+ * picking a different emoji replaces the previous one.
+ */
 @Table
-export default class StreamChat extends Model {
+export default class Reaction extends Model {
     @PrimaryKey
     @AllowNull(false)
     @Default(DataType.UUIDV4)
     @Column(DataType.UUID)
     declare id: string;
 
-    @ForeignKey(() => Stream)
-    @Column(DataType.UUID)
-    declare streamId: string;
-
-    @BelongsTo(() => Stream)
-    declare stream?: Stream;
-
+    @AllowNull(false)
+    @Unique("uniq_reaction_user_target")
     @ForeignKey(() => User)
+    @Index
     @Column(DataType.UUID)
     declare userId: string;
 
-    @BelongsTo(() => User)
+    @BelongsTo(() => User, { foreignKey: "userId", onDelete: "CASCADE" })
     declare user?: User;
 
     @AllowNull(false)
-    @Column(DataType.TEXT)
-    declare content: string;
+    @Unique("uniq_reaction_user_target")
+    @Column(DataType.STRING(32))
+    declare targetType: ReactionTargetType;
+
+    @AllowNull(false)
+    @Unique("uniq_reaction_user_target")
+    @Column(DataType.UUID)
+    declare targetId: string;
+
+    @AllowNull(false)
+    @Column(DataType.STRING(16))
+    declare emoji: string;
 
     @CreatedAt
     declare createdAt: Date;
 
     @UpdatedAt
     declare updatedAt: Date;
-
-    toClientside(
-        includeStream: boolean = false,
-        reactions: ClientsideReaction[] = [],
-    ): ClientsideStreamChat {
-        return {
-            id: this.id,
-            content: this.content,
-            createdAt: this.createdAt.getTime(),
-            user: this.user!.toClientside(),
-            stream: includeStream
-                ? this.stream?.toClientside(false)
-                : undefined,
-            reactions,
-        };
-    }
 }

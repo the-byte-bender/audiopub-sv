@@ -31,6 +31,7 @@
     import type {
         ClientsideStreamChat,
         ClientsideStreamMute,
+        ClientsideReaction,
     } from "$lib/types";
 
     onMount(() => title.set(data.stream.title));
@@ -75,6 +76,36 @@
         }, durationMs);
     }
 
+    async function handleChatReaction(
+        chat: ClientsideStreamChat,
+        emoji: string,
+    ) {
+        try {
+            const res = await fetch(`/live/${data.stream.id}/${chat.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ emoji }),
+            });
+            if (!res.ok) {
+                setChatNotice("Could not save your reaction.");
+                return;
+            }
+            const body = await res.json();
+            applyChatReactions(chat.id, body.reactions as ClientsideReaction[]);
+        } catch {
+            setChatNotice("Could not save your reaction.");
+        }
+    }
+
+    function applyChatReactions(
+        chatId: string,
+        reactions: ClientsideReaction[],
+    ) {
+        chats = chats.map((c) =>
+            c.id === chatId ? { ...c, reactions } : c,
+        );
+    }
+
     function connectSSE() {
         eventSource = new EventSource(`/live/${data.stream.id}/events`);
 
@@ -104,6 +135,23 @@
             const chat = JSON.parse(e.data) as ClientsideStreamChat;
             chats = [...chats.filter((c) => c.id !== chat.id), chat];
             handleNewChat(chat);
+        });
+
+        eventSource.addEventListener("chat_reaction", (e) => {
+            const d = JSON.parse(e.data);
+            const reactions = (d.reactions ?? []) as ClientsideReaction[];
+            // The broadcast tally has no notion of "mine"; recompute it from
+            // the actor when it was us, and keep our previous flags otherwise.
+            const mine =
+                d.actorId === data.user?.id
+                    ? (d.emoji as string | null)
+                    : (chats
+                          .find((c) => c.id === d.chatId)
+                          ?.reactions?.find((r) => r.reacted)?.emoji ?? null);
+            applyChatReactions(
+                d.chatId,
+                reactions.map((r) => ({ ...r, reacted: r.emoji === mine })),
+            );
         });
 
         eventSource.addEventListener("chat_delete", (e) => {
@@ -413,6 +461,7 @@
     isAdmin={data.isAdmin}
     onDelete={handleDeleteChat}
     onMute={handleMute}
+    onReact={handleChatReaction}
     streamOwnerId={data.stream.user?.id ?? null}
     onSendMessage={handleSendMessage}
     notice={chatNotice}

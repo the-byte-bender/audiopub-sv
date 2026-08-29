@@ -36,7 +36,11 @@ import {
 } from "sequelize-typescript";
 import Audio from "./audio";
 import User from "./user";
-import type { ClientsideComment, ClientsideAudio } from "$lib/types";
+import type {
+  ClientsideComment,
+  ClientsideAudio,
+  ClientsideReaction,
+} from "$lib/types";
 
 @Table
 export default class Comment extends Model {
@@ -83,7 +87,10 @@ export default class Comment extends Model {
   public countReplies!: () => Promise<number>;
   toClientside(
     includeAudio: boolean = false,
-    includeReplies: boolean = false
+    includeReplies: boolean = false,
+    // Reactions are aggregated separately (one batched query for the whole
+    // thread) and handed in here keyed by comment id.
+    reactions?: Map<string, ClientsideReaction[]>
   ): ClientsideComment {
     return {
       id: this.id,
@@ -93,8 +100,11 @@ export default class Comment extends Model {
       user: this.user!.toClientside(),
       audio: includeAudio ? this.audio?.toClientside() : undefined,
       replies: includeReplies
-        ? this.replies?.map((r) => r.toClientside(includeAudio, includeReplies))
+        ? this.replies?.map((r) =>
+            r.toClientside(includeAudio, includeReplies, reactions)
+          )
         : undefined,
+      reactions: reactions?.get(this.id) ?? [],
     };
   }
 

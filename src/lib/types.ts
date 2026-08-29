@@ -26,6 +26,19 @@ export interface ClientsideUser {
     isTrusted: boolean;
 }
 
+export enum ReactionTargetType {
+    comment = "comment",
+    streamChat = "stream_chat",
+}
+
+/** Aggregated reactions for one target, from the point of view of a viewer. */
+export interface ClientsideReaction {
+    emoji: string;
+    count: number;
+    /** True when the requesting user is one of the reactors. */
+    reacted: boolean;
+}
+
 export interface ClientsideStream {
     id: string;
     title: string;
@@ -45,6 +58,7 @@ export interface ClientsideStreamChat {
     createdAt: number;
     user: ClientsideUser;
     stream?: ClientsideStream;
+    reactions?: ClientsideReaction[];
 }
 
 export interface ClientsideStreamMute {
@@ -84,6 +98,7 @@ export interface ClientsideComment {
     user: ClientsideUser;
     audio?: ClientsideAudio;
     replies?: ClientsideComment[];
+    reactions?: ClientsideReaction[];
 }
 
 export enum NotificationType {

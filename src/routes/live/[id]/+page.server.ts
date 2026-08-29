@@ -26,7 +26,8 @@ import {
 import { error, redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { Op } from "sequelize";
-import type { ClientsideStreamMute } from "$lib/types";
+import { ReactionTargetType, type ClientsideStreamMute } from "$lib/types";
+import { summarizeReactions } from "$lib/server/reactions";
 
 export const load: PageServerLoad = async (event) => {
     const stream = await Stream.findByPk(event.params.id, {
@@ -73,9 +74,18 @@ export const load: PageServerLoad = async (event) => {
         }));
     }
 
+    const chats = stream.streamChats ?? [];
+    const chatReactions = await summarizeReactions(
+        ReactionTargetType.streamChat,
+        chats.map((c) => c.id),
+        viewer?.id,
+    );
+
     return {
         stream: stream.toClientside(true),
-        chats: stream.streamChats?.map((c) => c.toClientside()),
+        chats: chats.map((c) =>
+            c.toClientside(false, chatReactions.get(c.id) ?? []),
+        ),
         mutes,
         slowModeSeconds: stream.slowModeSeconds,
     };

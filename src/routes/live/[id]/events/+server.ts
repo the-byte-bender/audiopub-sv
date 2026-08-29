@@ -26,6 +26,7 @@ import {
     STREAM_CHAT_DELETED,
     STREAM_ARCHIVED,
     STREAM_MODERATION_CHANGED,
+    STREAM_CHAT_REACTION,
 } from "$lib/server/streaming";
 import type {
     StreamStateChangedEvent,
@@ -34,6 +35,7 @@ import type {
     StreamChatDeletedEvent,
     StreamArchivedEvent,
     StreamModerationChangedEvent,
+    StreamChatReactionEvent,
 } from "$lib/server/streaming";
 
 export const GET: RequestHandler = async (event) => {
@@ -84,6 +86,17 @@ export const GET: RequestHandler = async (event) => {
         }
     };
 
+    const onChatReaction = (data: StreamChatReactionEvent) => {
+        if (data.streamId === stream.id) {
+            send("chat_reaction", {
+                chatId: data.chatId,
+                reactions: data.reactions,
+                actorId: data.actorId,
+                emoji: data.emoji,
+            });
+        }
+    };
+
     const onModerationChanged = (data: StreamModerationChangedEvent) => {
         if (data.streamId === stream.id) {
             send("moderation", {
@@ -128,6 +141,7 @@ export const GET: RequestHandler = async (event) => {
             streamingService.on(STREAM_CHAT_DELETED, onChatDeleted);
             streamingService.on(STREAM_ARCHIVED, onArchived);
             streamingService.on(STREAM_MODERATION_CHANGED, onModerationChanged);
+            streamingService.on(STREAM_CHAT_REACTION, onChatReaction);
 
             keepalive = setInterval(() => {
                 try {
@@ -146,6 +160,7 @@ export const GET: RequestHandler = async (event) => {
             streamingService.off(STREAM_CHAT_DELETED, onChatDeleted);
             streamingService.off(STREAM_ARCHIVED, onArchived);
             streamingService.off(STREAM_MODERATION_CHANGED, onModerationChanged);
+            streamingService.off(STREAM_CHAT_REACTION, onChatReaction);
             streamingService.listenerDisconnected(stream.id);
         },
     });

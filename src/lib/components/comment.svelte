@@ -24,6 +24,7 @@
   import SafeMarkdown from "./safe_markdown.svelte";
   import { updated } from "$app/state";
   import CommentList from "./comment_list.svelte";
+  import ReactionBar from "./reaction_bar.svelte";
 
   export let comment: ClientsideComment;
   export let user: ClientsideUser | undefined = undefined;
@@ -31,6 +32,10 @@
   export let onReply: ((comment: ClientsideComment) => void) = comment => {};
   let isDeletionModalVisible: boolean = false;
   let replyDisabled: boolean = false;
+
+  // Banned or unverified users see the tally but cannot add to it, which
+  // mirrors what the server enforces.
+  $: canReact = Boolean(user && user.isVerified && !user.isBanned);
 
   $: commentDate = comment
     ? formatRelative(new Date(comment.createdAt), new Date())
@@ -43,6 +48,14 @@
     <span class="comment-date"> - {commentDate}</span>
   </h3>
   <SafeMarkdown source={comment.content} />
+
+  <ReactionBar
+    targetId={comment.id}
+    reactions={comment.reactions ?? []}
+    formAction="?/react_comment"
+    {canReact}
+    label="Reactions to this comment"
+  />
 
   <div id="comment-actions">
     {#if user}
