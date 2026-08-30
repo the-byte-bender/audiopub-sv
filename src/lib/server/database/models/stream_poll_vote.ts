@@ -1,7 +1,7 @@
 /*
  * This file is part of the audiopub project.
  *
- * Copyright (C) 2026 the-byte-bender
+ * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -26,58 +26,63 @@ import {
     Default,
     ForeignKey,
     BelongsTo,
+    Index,
+    Unique,
     CreatedAt,
     UpdatedAt,
 } from "sequelize-typescript";
 import User from "./user";
-import Stream from "./stream";
-import type { ClientsideStreamChat, ClientsideReaction } from "$lib/types";
+import StreamPoll from "./stream_poll";
+import StreamPollOption from "./stream_poll_option";
 
+/**
+ * One row per selected option. Single choice polls keep at most one row per
+ * user; multiple choice polls keep one per option the user picked.
+ */
 @Table
-export default class StreamChat extends Model {
+export default class StreamPollVote extends Model {
     @PrimaryKey
     @AllowNull(false)
     @Default(DataType.UUIDV4)
     @Column(DataType.UUID)
     declare id: string;
 
-    @ForeignKey(() => Stream)
+    @AllowNull(false)
+    @Unique("uniq_poll_vote_user_option")
+    @ForeignKey(() => StreamPoll)
+    @Index
     @Column(DataType.UUID)
-    declare streamId: string;
+    declare pollId: string;
 
-    @BelongsTo(() => Stream)
-    declare stream?: Stream;
+    @BelongsTo(() => StreamPoll, { foreignKey: "pollId", onDelete: "CASCADE" })
+    declare poll?: StreamPoll;
 
+    @AllowNull(false)
+    @Unique("uniq_poll_vote_user_option")
+    @ForeignKey(() => StreamPollOption)
+    @Index
+    @Column(DataType.UUID)
+    declare optionId: string;
+
+    @BelongsTo(() => StreamPollOption, {
+        foreignKey: "optionId",
+        onDelete: "CASCADE",
+    })
+    declare option?: StreamPollOption;
+
+    @AllowNull(false)
+    @Unique("uniq_poll_vote_user_option")
     @ForeignKey(() => User)
+    @Index
     @Column(DataType.UUID)
     declare userId: string;
 
-    @BelongsTo(() => User)
+    @BelongsTo(() => User, { foreignKey: "userId", onDelete: "CASCADE" })
     declare user?: User;
-
-    @AllowNull(false)
-    @Column(DataType.TEXT)
-    declare content: string;
 
     @CreatedAt
     declare createdAt: Date;
 
     @UpdatedAt
     declare updatedAt: Date;
-
-    toClientside(
-        includeStream: boolean = false,
-        reactions: ClientsideReaction[] = [],
-    ): ClientsideStreamChat {
-        return {
-            id: this.id,
-            content: this.content,
-            createdAt: this.createdAt.getTime(),
-            user: this.user!.toClientside(),
-            stream: includeStream
-                ? this.stream?.toClientside(false)
-                : undefined,
-            reactions,
-        };
-    }
 }

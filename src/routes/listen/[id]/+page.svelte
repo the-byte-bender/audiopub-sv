@@ -23,9 +23,14 @@
     import { onMount } from "svelte";
     import CommentList from "$lib/components/comment_list.svelte";
     import StreamChatList from "$lib/components/stream_chat_list.svelte";
+    import StreamPolls from "$lib/components/stream_polls.svelte";
     import title from "$lib/title";
     import SafeMarkdown from "$lib/components/safe_markdown.svelte";
-    import type { ClientsideComment } from "$lib/types.js";
+    import type {
+        ClientsideComment,
+        ClientsideStreamChat,
+    } from "$lib/types.js";
+    import { invalidateAll } from "$app/navigation";
     import SubscribeButton from "$lib/components/subscribe_button.svelte";
     import AudioPlayer from "$lib/components/audio_player.svelte";
     import Modal from "$lib/components/modal.svelte";
@@ -135,6 +140,24 @@
     let commentField: HTMLTextAreaElement;
     function onReply(comment: ClientsideComment) {
         commentField.focus();
+    }
+
+    async function onArchivedChatReact(
+        chat: ClientsideStreamChat,
+        emoji: string,
+    ) {
+        const res = await fetch(
+            `/live/${data.archivedStreamId}/${chat.id}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ emoji }),
+            },
+        );
+        if (res.ok) {
+            // The archived page has no live connection, so reload the tally.
+            await invalidateAll();
+        }
     }
 
     function onShareClick() {
@@ -448,6 +471,7 @@
                 user={data.user ?? undefined}
                 isAdmin={data.isAdmin}
                 streamOwnerId={data.audio.user?.id ?? null}
+                onReact={onArchivedChatReact}
                 onDelete={async (chatId) => {
                     await fetch(`/live/${data.archivedStreamId}/${chatId}`, {
                         method: "DELETE",
@@ -455,6 +479,15 @@
                 }}
             />
         </details>
+    {/if}
+
+    {#if data.archivedStreamId && data.archivedPolls && data.archivedPolls.length > 0}
+        <StreamPolls
+            streamId={data.archivedStreamId}
+            polls={data.archivedPolls}
+            readOnly
+            heading="Poll results from this stream"
+        />
     {/if}
 
     <section role="group" aria-label="Comments">

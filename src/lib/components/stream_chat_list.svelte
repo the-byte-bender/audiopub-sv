@@ -32,6 +32,9 @@
         | ((chat: ClientsideStreamChat, durationMinutes: number | null) => void)
         | null = null;
     export let streamOwnerId: string | null = null;
+    export let onReact:
+        | ((chat: ClientsideStreamChat, emoji: string) => void)
+        | null = null;
     export let notice: string = "";
 
     let messageText = "";
@@ -68,6 +71,7 @@
                 {onDelete}
                 {onMute}
                 {streamOwnerId}
+                {onReact}
                 currentUser={user}
             />
         {:else}

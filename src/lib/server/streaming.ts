@@ -24,7 +24,12 @@ import { EventEmitter } from "node:events";
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import type { ClientsideStreamChat, ClientsideStreamMute } from "$lib/types";
+import type {
+    ClientsideStreamChat,
+    ClientsideStreamMute,
+    ClientsidePoll,
+    ClientsideReaction,
+} from "$lib/types";
 import { StreamState, StreamFormat } from "$lib/types";
 
 const execFileAsync = promisify(execFile);
@@ -57,6 +62,46 @@ export class StreamingService extends EventEmitter {
             streamId,
             chatId,
         } as StreamChatDeletedEvent);
+    }
+
+    /**
+     * Reaction tallies are shared by everyone, but "did I react" is not, so the
+     * broadcast carries the actor and their new emoji and each client folds its
+     * own state in.
+     */
+    notifyChatReaction(
+        streamId: string,
+        chatId: string,
+        reactions: ClientsideReaction[],
+        actorId: string,
+        emoji: string | null,
+    ) {
+        this.emit(STREAM_CHAT_REACTION, {
+            streamId,
+            chatId,
+            reactions,
+            actorId,
+            emoji,
+        } as StreamChatReactionEvent);
+    }
+
+    notifyPollChanged(
+        streamId: string,
+        kind: "created" | "updated" | "closed",
+        poll: ClientsidePoll,
+    ) {
+        this.emit(STREAM_POLL_CHANGED, {
+            streamId,
+            kind,
+            poll,
+        } as StreamPollChangedEvent);
+    }
+
+    notifyPollDeleted(streamId: string, pollId: string) {
+        this.emit(STREAM_POLL_DELETED, {
+            streamId,
+            pollId,
+        } as StreamPollDeletedEvent);
     }
 
     notifyStateChanged(
@@ -574,6 +619,9 @@ export const STREAM_ARCHIVED = "stream:archived";
 export const STREAM_DESTROYED = "stream:destroyed";
 export const STREAM_LISTENERS_CHANGED = "stream:listeners_changed";
 export const STREAM_MODERATION_CHANGED = "stream:moderation_changed";
+export const STREAM_CHAT_REACTION = "stream:chat_reaction";
+export const STREAM_POLL_CHANGED = "stream:poll_changed";
+export const STREAM_POLL_DELETED = "stream:poll_deleted";
 
 export interface StreamEvent {
     streamId: string;
@@ -590,6 +638,24 @@ export interface StreamChatSentEvent extends StreamEvent {
 
 export interface StreamChatDeletedEvent extends StreamEvent {
     chatId: string;
+}
+
+export interface StreamChatReactionEvent extends StreamEvent {
+    chatId: string;
+    /** Shared tally; the `reacted` flags in it are meaningless to other viewers. */
+    reactions: ClientsideReaction[];
+    actorId: string;
+    /** The actor's reaction after the change, or null when they removed it. */
+    emoji: string | null;
+}
+
+export interface StreamPollChangedEvent extends StreamEvent {
+    kind: "created" | "updated" | "closed";
+    poll: ClientsidePoll;
+}
+
+export interface StreamPollDeletedEvent extends StreamEvent {
+    pollId: string;
 }
 
 export interface StreamListenersChangedEvent extends StreamEvent {

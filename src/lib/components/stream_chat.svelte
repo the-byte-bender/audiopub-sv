@@ -21,6 +21,7 @@
     import { formatRelative } from "date-fns";
     import SafeMarkdown from "./safe_markdown.svelte";
     import Modal from "./modal.svelte";
+    import ReactionBar from "./reaction_bar.svelte";
 
     export let chat: ClientsideStreamChat;
     export let isAdmin: boolean = false;
@@ -30,6 +31,9 @@
         | null = null;
     export let streamOwnerId: string | null = null;
     export let currentUser: ClientsideUser | null = null;
+    export let onReact:
+        | ((chat: ClientsideStreamChat, emoji: string) => void)
+        | null = null;
 
     let isDeletionModalVisible: boolean = false;
     let isMuteModalVisible: boolean = false;
@@ -41,6 +45,9 @@
         onDelete !== null && (isOwnMessage || isStreamOwner || isAdmin);
     $: canMute = onMute !== null && (isStreamOwner || isAdmin);
     $: chatDate = formatRelative(new Date(chat.createdAt), new Date());
+    $: canReact = Boolean(
+        onReact && currentUser && currentUser.isVerified && !currentUser.isBanned,
+    );
 
     function confirmMute() {
         const duration =
@@ -59,6 +66,16 @@
         <span class="chat-date">{chatDate}</span>
     </h3>
     <SafeMarkdown source={chat.content} />
+
+    <ReactionBar
+        targetId={chat.id}
+        reactions={chat.reactions ?? []}
+        onReact={(emoji) => {
+            onReact?.(chat, emoji);
+        }}
+        {canReact}
+        label="Reactions to this message"
+    />
 
     {#if canMute}
         <button on:click={() => (isMuteModalVisible = true)}>Mute Sender</button>

@@ -1,7 +1,7 @@
 /*
  * This file is part of the audiopub project.
  *
- * Copyright (C) 2026 the-byte-bender
+ * Copyright (C) 2024 the-byte-bender
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -26,58 +26,55 @@ import {
     Default,
     ForeignKey,
     BelongsTo,
+    HasMany,
+    Index,
     CreatedAt,
     UpdatedAt,
 } from "sequelize-typescript";
-import User from "./user";
-import Stream from "./stream";
-import type { ClientsideStreamChat, ClientsideReaction } from "$lib/types";
+import StreamPoll from "./stream_poll";
+import StreamPollVote from "./stream_poll_vote";
 
 @Table
-export default class StreamChat extends Model {
+export default class StreamPollOption extends Model {
     @PrimaryKey
     @AllowNull(false)
     @Default(DataType.UUIDV4)
     @Column(DataType.UUID)
     declare id: string;
 
-    @ForeignKey(() => Stream)
+    @AllowNull(false)
+    @ForeignKey(() => StreamPoll)
+    @Index
     @Column(DataType.UUID)
-    declare streamId: string;
+    declare pollId: string;
 
-    @BelongsTo(() => Stream)
-    declare stream?: Stream;
-
-    @ForeignKey(() => User)
-    @Column(DataType.UUID)
-    declare userId: string;
-
-    @BelongsTo(() => User)
-    declare user?: User;
+    @BelongsTo(() => StreamPoll, { foreignKey: "pollId", onDelete: "CASCADE" })
+    declare poll?: StreamPoll;
 
     @AllowNull(false)
-    @Column(DataType.TEXT)
-    declare content: string;
+    @Column(DataType.STRING(200))
+    declare text: string;
+
+    @AllowNull(false)
+    @Default(0)
+    @Column(DataType.INTEGER)
+    declare position: number;
+
+    /**
+     * Denormalized tally. Votes are also stored individually so a user can
+     * change their mind, but the running count is what every listener sees.
+     */
+    @AllowNull(false)
+    @Default(0)
+    @Column(DataType.INTEGER)
+    declare voteCount: number;
+
+    @HasMany(() => StreamPollVote, { onDelete: "CASCADE" })
+    declare votes?: StreamPollVote[];
 
     @CreatedAt
     declare createdAt: Date;
 
     @UpdatedAt
     declare updatedAt: Date;
-
-    toClientside(
-        includeStream: boolean = false,
-        reactions: ClientsideReaction[] = [],
-    ): ClientsideStreamChat {
-        return {
-            id: this.id,
-            content: this.content,
-            createdAt: this.createdAt.getTime(),
-            user: this.user!.toClientside(),
-            stream: includeStream
-                ? this.stream?.toClientside(false)
-                : undefined,
-            reactions,
-        };
-    }
 }

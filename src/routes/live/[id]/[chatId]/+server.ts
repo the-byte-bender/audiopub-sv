@@ -20,6 +20,12 @@ import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { StreamChat, Stream } from "$lib/server/database";
 import { streamingService } from "$lib/server/streaming";
+import {
+    InvalidReactionError,
+    deleteReactionsFor,
+    toggleReaction,
+} from "$lib/server/reactions";
+import { ReactionTargetType } from "$lib/types";
 
 export const DELETE: RequestHandler = async (event) => {
     const user = event.locals.user;
@@ -42,6 +48,67 @@ export const DELETE: RequestHandler = async (event) => {
     }
 
     await chat.destroy();
+    await deleteReactionsFor(ReactionTargetType.streamChat, chat.id);
     streamingService.notifyChatDeleted(stream.id, chat.id);
     return json({ success: true });
+};
+
+/**
+ * Toggles the caller's reaction on a chat message. This also works after the
+ * stream is archived, so the chat history on the audio page stays interactive.
+ */
+export const POST: RequestHandler = async (event) => {
+    const user = event.locals.user;
+    if (!user) {
+        return json({ message: "You must be logged in" }, { status: 401 });
+    }
+    if (user.isBanned) {
+        return json({ message: "You are banned" }, { status: 403 });
+    }
+    if (!user.isVerified) {
+        return json(
+            { message: "Please verify your email before reacting" },
+            { status: 403 },
+        );
+    }
+
+    const chatId = event.params.chatId;
+    if (!chatId) {
+        return json({ message: "Missing chat ID" }, { status: 400 });
+    }
+
+    const chat = await StreamChat.findByPk(chatId, { include: Stream });
+    if (!chat) {
+        return json({ message: "Not found" }, { status: 404 });
+    }
+
+    let body: any;
+    try {
+        body = await event.request.json();
+    } catch {
+        return json({ message: "Invalid request" }, { status: 400 });
+    }
+
+    try {
+        const reactions = await toggleReaction(
+            user.id,
+            ReactionTargetType.streamChat,
+            chat.id,
+            body?.emoji,
+        );
+        const mine = reactions.find((r) => r.reacted)?.emoji ?? null;
+        streamingService.notifyChatReaction(
+            chat.streamId,
+            chat.id,
+            reactions,
+            user.id,
+            mine,
+        );
+        return json({ reactions });
+    } catch (err) {
+        if (err instanceof InvalidReactionError) {
+            return json({ message: "Unknown reaction" }, { status: 400 });
+        }
+        throw err;
+    }
 };

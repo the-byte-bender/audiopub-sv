@@ -41,6 +41,14 @@ import {
     MAX_USER_AUDIO_EDITS,
     updateAudioDetails,
 } from "$lib/server/audio_edits";
+import {
+    InvalidReactionError,
+    deleteReactionsFor,
+    summarizeReactions,
+    toggleReaction,
+} from "$lib/server/reactions";
+import { getPollsForStream } from "$lib/server/polls";
+import { ReactionTargetType } from "$lib/types";
 
 export const load: PageServerLoad = async (event) => {
     const audio = await Audio.findByPk(event.params.id, {
@@ -102,6 +110,12 @@ export const load: PageServerLoad = async (event) => {
             { where: whereClause },
         );
     }
+
+    const commentReactions = await summarizeReactions(
+        ReactionTargetType.comment,
+        comments.map((c) => c.id),
+        viewer?.id,
+    );
 
     const sortedComments = Comment.constructThreads(comments);
     const canEdit = Boolean(
@@ -185,7 +199,9 @@ export const load: PageServerLoad = async (event) => {
 
     return {
         audio: audio.toClientside(true, favoriteCount, isFavorited),
-        comments: sortedComments.map((c) => c.toClientside(false, true)),
+        comments: sortedComments.map((c) =>
+            c.toClientside(false, true, commentReactions),
+        ),
         mimeType: audio.mimeType,
         isFollowing,
         archivedStreamId: audio.archivedStreamId,
@@ -194,8 +210,21 @@ export const load: PageServerLoad = async (event) => {
                   where: { streamId: audio.archivedStreamId },
                   include: { model: User },
                   order: [["createdAt", "ASC"]],
-              }).then((chats) => chats.map((c) => c.toClientside()))
+              }).then(async (chats) => {
+                  const reactions = await summarizeReactions(
+                      ReactionTargetType.streamChat,
+                      chats.map((c) => c.id),
+                      viewer?.id,
+                  );
+                  return chats.map((c) =>
+                      c.toClientside(false, reactions.get(c.id) ?? []),
+                  );
+              })
             : null,
+        // Polls from the broadcast stay readable once it is archived.
+        archivedPolls: audio.archivedStreamId
+            ? await getPollsForStream(audio.archivedStreamId, viewer?.id)
+            : [],
         isSubscribed,
         canEdit,
         hasEdits: Boolean(viewer?.isAdmin && edits.length > 0),
@@ -297,6 +326,40 @@ export const actions: Actions = {
 
         return { editSuccess: true };
     },
+    react_comment: async (event) => {
+        const user = event.locals.user;
+        if (!user || !user.isVerified || user.isBanned) {
+            return error(403, "Forbidden");
+        }
+
+        const form = await event.request.formData();
+        const targetId = form.get("targetId");
+        const emoji = form.get("emoji");
+        if (typeof targetId !== "string" || typeof emoji !== "string") {
+            return fail(400, { reactionMessage: "Invalid reaction" });
+        }
+
+        const comment = await Comment.findByPk(targetId);
+        if (!comment || comment.audioId !== event.params.id) {
+            return error(404, "Not found");
+        }
+
+        try {
+            await toggleReaction(
+                user.id,
+                ReactionTargetType.comment,
+                comment.id,
+                emoji,
+            );
+        } catch (err) {
+            if (err instanceof InvalidReactionError) {
+                return fail(400, { reactionMessage: "Unknown reaction" });
+            }
+            throw err;
+        }
+
+        return { success: true };
+    },
     setAnnouncement: async (event) => {
         const user = event.locals.user;
         if (!user || !user.isAdmin) {
@@ -307,7 +370,7 @@ export const actions: Actions = {
             return error(404, "Not found");
         }
         const form = await event.request.formData();
-        // The button posts the state it wants, so the action stays idempotent
+        // The toggle posts the state it wants, so the action stays idempotent
         // and a double submit cannot flip it back.
         audio.isAnnouncement = form.get("isAnnouncement") === "on";
         await audio.save();
@@ -425,6 +488,7 @@ export const actions: Actions = {
 
         // Otherwise we can just delete it
         await comment.destroy();
+        await deleteReactionsFor(ReactionTargetType.comment, comment.id);
         return { success: true };
     },
     follow: async (event) => {
