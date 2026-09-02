@@ -31,6 +31,7 @@ export const load: PageServerLoad = async (event) => {
         return {
             user: {
                 id: user.id,
+                name: user.name,
                 streamKey: user.streamKey,
             },
         };
