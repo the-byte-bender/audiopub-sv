@@ -27,8 +27,39 @@ import { error, redirect } from "@sveltejs/kit";
 import type { PageServerLoad } from "./$types";
 import { Op } from "sequelize";
 import type { ClientsideStreamMute } from "$lib/types";
+import { isUsernameParam } from "$lib/live_links";
+import { resolveLiveUsername } from "$lib/server/live_links";
 
 export const load: PageServerLoad = async (event) => {
+    /*
+     * "@username" is the shareable alias for whatever this account is
+     * broadcasting right now; it redirects to the uuid link rather than
+     * rendering here, so there stays exactly one canonical page per stream and
+     * the chat, SSE and moderation endpoints -- which all address a stream by
+     * id -- need no changes. Checked before the findByPk below because a name
+     * is not a stream id and would simply miss.
+     */
+    if (isUsernameParam(event.params.id)) {
+        const resolved = await resolveLiveUsername(event.params.id);
+        if (resolved.kind === "live") {
+            return redirect(302, `/live/${resolved.streamId}`);
+        }
+        if (resolved.kind === "not_live") {
+            return error(404, {
+                message: `${resolved.displayName} is not broadcasting right now.`,
+                live: {
+                    reason: "not_live",
+                    userName: resolved.userName,
+                    displayName: resolved.displayName,
+                },
+            });
+        }
+        return error(404, {
+            message: "There is no account with that name.",
+            live: { reason: "no_user", userName: resolved.userName },
+        });
+    }
+
     const stream = await Stream.findByPk(event.params.id, {
         include: [
             User,

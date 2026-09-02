@@ -20,7 +20,20 @@
 // for information about these interfaces
 declare global {
 	namespace App {
-		// interface Error {}
+		interface Error {
+			message: string;
+			/*
+			 * Set by the /live/@username lookup so its error page can say which
+			 * of the two things went wrong -- no such account, or an account
+			 * that simply is not broadcasting -- and link somewhere useful
+			 * instead of showing a bare 404.
+			 */
+			live?: {
+				reason: "no_user" | "not_live";
+				userName: string;
+				displayName?: string;
+			};
+		}
 		// interface Locals {}
 		// interface PageData {}
 		// interface PageState {}
