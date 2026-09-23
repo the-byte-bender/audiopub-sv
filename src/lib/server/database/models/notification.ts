@@ -223,6 +223,17 @@ export default class Notification extends Model {
 
     @AfterCreate
     static async sendPushNotification(notification: Notification) {
+        // Push is a side effect of saving a notification. If OneSignal is
+        // unreachable the notification is still saved, and the request that
+        // created it must not fail over it.
+        try {
+            await Notification.push(notification);
+        } catch (err) {
+            console.error("Error sending push notification:", err);
+        }
+    }
+
+    private static async push(notification: Notification) {
         if (notification.type == NotificationType.system) return;
 
         const [resolvedNotification] = await this.resolveMany([notification]);
@@ -234,6 +245,10 @@ export default class Notification extends Model {
             const comment = resolvedNotification.target as ClientsideComment;
 
             title = `${resolvedNotification.actor?.displayName} commented on ${comment.audio?.title}`;
+            message = comment.content;
+        } else if (resolvedNotification.type == NotificationType.mention && resolvedNotification.target) {
+            const comment = resolvedNotification.target as ClientsideComment;
+            title = `${resolvedNotification.actor?.displayName} mentioned you on ${comment.audio?.title}`;
             message = comment.content;
         } else if (resolvedNotification.type == NotificationType.favorite && resolvedNotification.target) {
             const audio = resolvedNotification.target as ClientsideAudio;

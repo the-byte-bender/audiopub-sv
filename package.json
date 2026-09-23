@@ -45,6 +45,7 @@
 		"jsonwebtoken": "^9.0.2",
 		"mailgun.js": "^12.1.1",
 		"mariadb": "^3.4.5",
+		"marked": "^16.4.2",
 		"mime-types": "^3.0.1",
 		"react-onesignal": "^3.5.1",
 		"sequelize": "^6.37.7",

@@ -42,7 +42,7 @@
     <a href={`/user/@${encodeURIComponent(comment.user.name)}`}>{comment.user.displayName}</a>
     <span class="comment-date"> - {commentDate}</span>
   </h3>
-  <SafeMarkdown source={comment.content} />
+  <SafeMarkdown source={comment.content} mentions={comment.mentions} />
 
   <div id="comment-actions">
     {#if user}

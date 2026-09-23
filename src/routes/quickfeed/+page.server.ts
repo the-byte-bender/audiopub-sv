@@ -16,12 +16,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import { Audio, User, Comment, AudioFollow, Notification } from "$lib/server/database";
+import { Audio, User, Comment } from "$lib/server/database";
 import AudioFavorite from "$lib/server/database/models/audio_favorite";
 import type { Actions, PageServerLoad } from "./$types";
 import { type OrderItem, Sequelize } from "sequelize";
 import { fail, error } from "@sveltejs/kit";
 import { excludeMutedUsers, getMutedUserIds } from "$lib/server/mutes";
+import { attachMentions } from "$lib/server/mentions";
+import { notifyAboutComment } from "$lib/server/comment_notifications";
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
@@ -112,15 +114,18 @@ export const load: PageServerLoad = async (event) => {
         commentsByAudio.get(audioId)?.push(comment);
     });
 
+    const clientsideAudios = audios.rows.map((audio) => {
+        const favoriteCount = favoriteCounts.get(audio.id) || 0;
+        const isFavorited = userFavorites.has(audio.id);
+        return {
+            ...audio.toClientside(true, favoriteCount, isFavorited),
+            comments: (commentsByAudio.get(audio.id) || []).map(comment => comment.toClientside())
+        };
+    });
+    await attachMentions(clientsideAudios.flatMap((audio) => audio.comments));
+
     return {
-        audios: audios.rows.map((audio) => {
-            const favoriteCount = favoriteCounts.get(audio.id) || 0;
-            const isFavorited = userFavorites.has(audio.id);
-            return {
-                ...audio.toClientside(true, favoriteCount, isFavorited),
-                comments: (commentsByAudio.get(audio.id) || []).map(comment => comment.toClientside())
-            };
-        }),
+        audios: clientsideAudios,
         count: audios.count,
         page,
         limit,
@@ -241,28 +246,15 @@ export const actions: Actions = {
                 content: comment,
             });
 
-            // Send notifications to followers
-            const followers = await AudioFollow.findAll({
-                where: { audioId: audio.id } as any,
-            });
-            const followerIds = new Set<string>(followers.map((f) => f.userId));
-            if (audio.userId) followerIds.add(audio.userId);
-            followerIds.delete(user.id);
-            
-            const payloads = Array.from(followerIds).map((uid) => ({
-                userId: uid,
-                actorId: user.id,
-                type: "comment" as const,
-                targetType: "comment" as const,
-                targetId: commentInDatabase.id,
-                metadata: { audioId: audio.id },
-            }));
-            
-            if (payloads.length) {
-                await Notification.bulkCreate(payloads as any);
-            }
+            await notifyAboutComment(commentInDatabase, audio, user);
 
-            return { success: true, comment: commentInDatabase.toClientside() };
+            // The new comment is appended client side, so it has to come
+            // back with its author and mentions like the rest of the list.
+            commentInDatabase.user = user;
+            const [clientsideComment] = await attachMentions([
+                commentInDatabase.toClientside(),
+            ]);
+            return { success: true, comment: clientsideComment };
         } catch (error) {
             console.error('Error adding comment:', error);
             return fail(500, { message: "Failed to add comment" });

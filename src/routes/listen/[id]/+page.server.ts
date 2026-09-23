@@ -35,6 +35,8 @@ import sendEmail from "$lib/server/email";
 import { json, Op, Sequelize } from "sequelize";
 import { Json } from "sequelize/lib/utils";
 import { subscribe, unsubscribe } from "$lib/server/subscriptions";
+import { attachMentions } from "$lib/server/mentions";
+import { notifyAboutComment } from "$lib/server/comment_notifications";
 import {
     canBeMuted,
     canMute,
@@ -202,7 +204,9 @@ export const load: PageServerLoad = async (event) => {
         isMuted,
         canBeMutedByUser,
         audio: audio.toClientside(true, favoriteCount, isFavorited),
-        comments: sortedComments.map((c) => c.toClientside(false, true)),
+        comments: await attachMentions(
+            sortedComments.map((c) => c.toClientside(false, true)),
+        ),
         mimeType: audio.mimeType,
         isFollowing,
         archivedStreamId: audio.archivedStreamId,
@@ -374,24 +378,7 @@ export const actions: Actions = {
             content: comment,
         });
 
-        // Send notifications to followers
-        const followers = await AudioFollow.findAll({
-            where: { audioId: audio.id } as any,
-        });
-        const followerIds = new Set<string>(followers.map((f) => f.userId));
-        if (audio.userId) followerIds.add(audio.userId);
-        followerIds.delete(user.id);
-        const payloads = Array.from(followerIds).map((uid) => ({
-            userId: uid,
-            actorId: user.id,
-            type: "comment" as const,
-            targetType: "comment" as const,
-            targetId: commentInDatabase.id,
-            metadata: { audioId: audio.id },
-        }));
-        if (payloads.length) {
-            await Notification.bulkCreate(payloads as any, { individualHooks: true });
-        }
+        await notifyAboutComment(commentInDatabase, audio, user);
 
         return { success: true };
     },

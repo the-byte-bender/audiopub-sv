@@ -21,6 +21,8 @@ import type { Actions, PageServerLoad } from "./$types";
 import { Notification } from "$lib/server/database";
 import { Op } from "sequelize";
 import { getMutedUserIds } from "$lib/server/mutes";
+import { attachMentions } from "$lib/server/mentions";
+import { NotificationTargetType, type ClientsideComment } from "$lib/types";
 
 export const load: PageServerLoad = async (event) => {
     const user = event.locals.user;
@@ -52,6 +54,13 @@ export const load: PageServerLoad = async (event) => {
     });
 
     const resolved = await Notification.resolveMany(list);
+    await attachMentions(
+        resolved
+            .filter(
+                (n) => n.targetType === NotificationTargetType.comment && n.target,
+            )
+            .map((n) => n.target as ClientsideComment),
+    );
 
     const now = new Date();
     await Notification.update(

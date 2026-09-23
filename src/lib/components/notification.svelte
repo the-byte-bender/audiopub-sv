@@ -66,7 +66,17 @@
             Commented on <a {href}>{comment.audio?.title}</a>
             <span class="comment-date"> - {relativeTime}</span>
         </h3>
-        <SafeMarkdown source={comment.content} />
+        <SafeMarkdown source={comment.content} mentions={comment.mentions} />
+    {:else if notification.type === NotificationType.mention && notification.target}
+        {@const comment = notification.target as ClientsideComment}
+        <h3>
+            <a href={notification.actor ? `/user/@${encodeURIComponent(notification.actor.name)}` : undefined}>
+                {notification.actor?.displayName}
+            </a>
+            mentioned you on <a {href}>{comment.audio?.title}</a>
+            <span class="comment-date"> - {relativeTime}</span>
+        </h3>
+        <SafeMarkdown source={comment.content} mentions={comment.mentions} />
     {:else if notification.type === NotificationType.favorite && notification.target}
         {@const audio = notification.target}
         <h3>

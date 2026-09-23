@@ -22,9 +22,19 @@
         excludeRenderersOnly,
         buildUnsupportedHTML,
     } from "@humanspeak/svelte-markdown";
+    import { setContext } from "svelte";
+    import { writable } from "svelte/store";
+    import { MENTION_NAMES_CONTEXT } from "$lib/mentions";
     import UntrustedLink from "./untrusted_link.svelte";
+    import MentionText from "./mention_text.svelte";
 
     export let source: string;
+    /** Lowercase usernames whose @mentions in the source become profile links. */
+    export let mentions: string[] = [];
+
+    const mentionNames = writable(new Set<string>());
+    $: mentionNames.set(new Set(mentions));
+    setContext(MENTION_NAMES_CONTEXT, mentionNames);
 </script>
 
 <SvelteMarkdown
@@ -33,6 +43,7 @@
         ...excludeRenderersOnly(["heading", "image"]),
         html: buildUnsupportedHTML(),
         link: UntrustedLink,
+        rawtext: MentionText,
     }}
     options={{
         gfm: true,

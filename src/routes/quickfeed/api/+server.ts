@@ -22,6 +22,7 @@ import type { RequestHandler } from "./$types";
 import { type OrderItem, Sequelize } from "sequelize";
 import { json, error } from "@sveltejs/kit";
 import { excludeMutedUsers, getMutedUserIds } from "$lib/server/mutes";
+import { attachMentions } from "$lib/server/mentions";
 
 export const GET: RequestHandler = async ({ url, locals }) => {
     try {
@@ -127,6 +128,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
                 comments: (commentsByAudio.get(audio.id) || []).map(comment => comment.toClientside())
             };
         });
+        await attachMentions(processedAudios.flatMap((audio) => audio.comments));
 
         const totalPages = Math.ceil(audios.count / limit);
         const hasMore = page < totalPages;
