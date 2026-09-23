@@ -29,13 +29,7 @@ import {
     mute,
     unmute,
 } from "$lib/server/mutes";
-
-async function findUserByProfileParam(param: string) {
-    if (param.startsWith("@")) {
-        return User.findOne({ where: { name: param.slice(1).toLowerCase() } });
-    }
-    return User.findByPk(param);
-}
+import { findUserByProfileParam } from "$lib/server/profiles";
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");

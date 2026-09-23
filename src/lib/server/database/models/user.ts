@@ -33,6 +33,7 @@ import {
     HasMany,
 } from "sequelize-typescript";
 import sendEmail from "$lib/server/email";
+import { baseUrl } from "$lib/server/base_url";
 import { v4 as uuidv4, v4 } from "uuid";
 import * as dotenv from "dotenv";
 import Audio from "./audio";
@@ -44,12 +45,6 @@ dotenv.config();
 if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET is not defined");
 }
-
-// The public URL of this instance, used to build the links we put in emails.
-const baseUrl = (process.env.BASE_URL || "https://audiopub.site").replace(
-    /\/+$/,
-    "",
-);
 
 export interface UserInfo {
     id: string;

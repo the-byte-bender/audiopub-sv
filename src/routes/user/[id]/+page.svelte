@@ -28,6 +28,10 @@
     export let data;
     onMount(() => title.set(`${data.profileUser.displayName}'s Profile`));
 
+    // The feed only exists for accounts a logged-out visitor could see.
+    $: hasFeed = data.profileUser.isTrusted && !data.profileUser.isBanned;
+    $: feedUrl = `/user/@${encodeURIComponent(data.profileUser.name)}/feed.xml`;
+
     function onShareClick() {
         const url = `${window.location.origin}/user/@${encodeURIComponent(data.profileUser.name)}`;
         if (navigator.share) {
@@ -48,10 +52,37 @@
                 });
         }
     }
+
+    // A browser downloads the feed instead of showing it, so rather than link
+    // to it, hand over the address to paste into a podcast app.
+    function onCopyFeedClick() {
+        navigator.clipboard
+            .writeText(`${window.location.origin}${feedUrl}`)
+            .then(() => {
+                alert("RSS feed link copied to clipboard");
+            })
+            .catch((err) => {
+                console.error("Could not copy text: ", err);
+            });
+    }
 </script>
+
+<svelte:head>
+    {#if hasFeed}
+        <link
+            rel="alternate"
+            type="application/rss+xml"
+            title={`${data.profileUser.displayName} on Audiopub`}
+            href={feedUrl}
+        />
+    {/if}
+</svelte:head>
 
 <h1>{data.profileUser.displayName}'s Profile</h1>
 <button on:click={onShareClick}>Share profile</button>
+{#if hasFeed}
+    <button on:click={onCopyFeedClick}>Copy RSS feed link</button>
+{/if}
 
 <table>
     <tbody>
