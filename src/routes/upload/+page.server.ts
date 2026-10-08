@@ -104,8 +104,14 @@ export const actions: Actions = {
         await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
         transcode(audio.path).catch(async (err) => {
             console.error(err);
-            await audio.destroy();
-            await fs.unlink(audio.path);
+            // The audio may have been deleted while it was transcoding, and a
+            // failure to clean up must not take the whole server down with it.
+            try {
+                await audio.destroy();
+                await fs.unlink(audio.path);
+            } catch (cleanupErr) {
+                console.error(cleanupErr);
+            }
         });
 
         const subscriptions = await Subscription.findAll({ where: { subscribedToId: event.locals.user?.id } });
