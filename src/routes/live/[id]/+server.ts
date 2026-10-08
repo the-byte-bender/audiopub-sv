@@ -18,9 +18,9 @@
  */
 import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { Stream, StreamChat, User, StreamMute } from "$lib/server/database";
+import { Stream, User, StreamMute } from "$lib/server/database";
 import { streamingService } from "$lib/server/streaming";
-import { Op } from "sequelize";
+import { sendStreamChat } from "$lib/server/stream_chats";
 
 export const DELETE: RequestHandler = async (event) => {
     if (!event.locals.user) {
@@ -49,82 +49,13 @@ export const POST: RequestHandler = async (event) => {
         throw error(401, "You must be logged in to send messages");
     }
 
-    if (event.locals.user.isBanned) {
-        throw error(403, "You are banned");
-    }
-
-    if (!event.locals.user.isVerified) {
-        throw error(403, "Please verify your email before sending messages");
-    }
-
     const stream = await Stream.findByPk(event.params.id);
     if (!stream) {
         throw error(404, "Stream not found");
     }
 
-    if (stream.state === "finished") {
-        throw error(400, "Stream has ended");
-    }
-
-    const activeMute = await StreamMute.findOne({
-        where: {
-            streamId: stream.id,
-            userId: event.locals.user.id,
-            [Op.or]: [
-                { expiresAt: null },
-                { expiresAt: { [Op.gt]: new Date() } },
-            ],
-        },
-    });
-    if (activeMute) {
-        throw error(403, "You are muted in this stream");
-    }
-
-    if (stream.slowModeSeconds > 0) {
-        const lastMessage = await StreamChat.findOne({
-            where: { streamId: stream.id, userId: event.locals.user.id },
-            order: [["createdAt", "DESC"]],
-        });
-        if (lastMessage) {
-            const elapsed = Date.now() - lastMessage.createdAt.getTime();
-            if (elapsed < stream.slowModeSeconds * 1000) {
-                const waitSeconds = Math.ceil(
-                    (stream.slowModeSeconds * 1000 - elapsed) / 1000,
-                );
-                throw error(
-                    429,
-                    `Slow mode is on. Please wait ${waitSeconds} second${
-                        waitSeconds === 1 ? "" : "s"
-                    }.`,
-                );
-            }
-        }
-    }
-
     const body = await event.request.json();
-    if (!body.content || typeof body.content !== "string") {
-        throw error(400, "Message content required");
-    }
-
-    const content = body.content.trim();
-    if (!content || content.length > 2000) {
-        throw error(400, "Invalid message content");
-    }
-
-    const chat = await StreamChat.create({
-        streamId: stream.id,
-        userId: event.locals.user.id,
-        content,
-    });
-
-    const chatWithUser = await StreamChat.findByPk(chat.id, {
-        include: User,
-    });
-
-    const clientsideChat = chatWithUser!.toClientside();
-    streamingService.notifyChatSent(stream.id, clientsideChat);
-
-    return json(clientsideChat);
+    return json(await sendStreamChat(event.locals.user, stream, body.content));
 };
 
 // Moderation controls for the stream owner (or an admin)

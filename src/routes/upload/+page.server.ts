@@ -16,13 +16,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import fs from "fs/promises";
-import path from "path";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
-import { Audio, Notification, Subscription, User } from "$lib/server/database";
-import transcode from "$lib/server/transcode";
-import { NotificationTargetType, NotificationType } from "$lib/types";
+import { Audio, User } from "$lib/server/database";
+import {
+    getUploadRestriction,
+    MAX_AUDIO_FILE_SIZE,
+    publishAudio,
+} from "$lib/server/audios";
 
 export const load: PageServerLoad = async (event) => {
     const user = event.locals.user;
@@ -52,22 +53,9 @@ export const actions: Actions = {
         if (!user) {
             return redirect(303, "/login");
         }
-        if (user.isBanned) {
-            return error(403, "You are banned");
-        }
-        if (!user.isVerified) {
-            return error(403, "Please verify your email first.");
-        }
-        if (!user.isTrusted) {
-            const userAudioCount = await Audio.count({
-                where: { userId: user.id },
-            });
-            if (userAudioCount >= 1) {
-                return error(
-                    403,
-                    "Please wait for your account to be reviewed.",
-                );
-            }
+        const restriction = await getUploadRestriction(user);
+        if (restriction) {
+            return error(403, restriction);
         }
 
         const form = await event.request.formData();
@@ -89,35 +77,16 @@ export const actions: Actions = {
         if (description && description.length > 5000) {
             return fail(400, { title, description });
         }
-        if (file.size > 1024 * 1024 * 500) {
-            // 500 MB
+        if (file.size > MAX_AUDIO_FILE_SIZE) {
             return fail(400, { title, description });
         }
-        const audio = await Audio.create({
+        const audio = await publishAudio(
+            user,
+            file,
             title,
             description,
-            hasFile: true,
-            userId: user.id,
-            extension: path.extname(file.name),
             isAnnouncement,
-        });
-        await fs.writeFile(audio.path, Buffer.from(await file.arrayBuffer()));
-        transcode(audio.path).catch(async (err) => {
-            console.error(err);
-            await audio.destroy();
-            await fs.unlink(audio.path);
-        });
-
-        const subscriptions = await Subscription.findAll({ where: { subscribedToId: event.locals.user?.id } });
-        for (const subscription of subscriptions) {
-            await Notification.create({
-                userId: subscription.subscriberId,
-                actorId: user.id,
-                type: NotificationType.upload,
-                targetType: NotificationTargetType.audio,
-                targetId: audio.id,
-            });
-        }
+        );
 
         return redirect(303, `/listen/${audio.id}`);
     },

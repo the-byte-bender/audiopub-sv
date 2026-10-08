@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import fs from "fs/promises";
 import {
     Audio,
     Comment,
@@ -48,6 +47,8 @@ import {
     MAX_USER_AUDIO_EDITS,
     updateAudioDetails,
 } from "$lib/server/audio_edits";
+import { addComment, deleteComment } from "$lib/server/comments";
+import { deleteAudio } from "$lib/server/audios";
 
 export const load: PageServerLoad = async (event) => {
     const audio = await Audio.findByPk(event.params.id, {
@@ -339,8 +340,7 @@ export const actions: Actions = {
         if (!user || (!user.isAdmin && user.id !== audio.userId)) {
             return error(403, "Forbidden");
         }
-        await fs.unlink(audio.path);
-        await audio.destroy();
+        await deleteAudio(audio);
         return redirect(303, "/");
     },
     add_comment: async (event) => {
@@ -367,32 +367,7 @@ export const actions: Actions = {
             });
         }
 
-        const commentInDatabase = await Comment.create({
-            userId: user.id,
-            audioId: audio.id,
-            parentId,
-            content: comment,
-        });
-
-        // Send notifications to followers
-        const followers = await AudioFollow.findAll({
-            where: { audioId: audio.id } as any,
-        });
-        const followerIds = new Set<string>(followers.map((f) => f.userId));
-        if (audio.userId) followerIds.add(audio.userId);
-        followerIds.delete(user.id);
-        const payloads = Array.from(followerIds).map((uid) => ({
-            userId: uid,
-            actorId: user.id,
-            type: "comment" as const,
-            targetType: "comment" as const,
-            targetId: commentInDatabase.id,
-            metadata: { audioId: audio.id },
-        }));
-        if (payloads.length) {
-            await Notification.bulkCreate(payloads as any, { individualHooks: true });
-        }
-
+        await addComment(user, audio, comment, parentId);
         return { success: true };
     },
     reply_to_comment: async ({ request }) => {
@@ -428,20 +403,7 @@ export const actions: Actions = {
             return error(403, "Forbidden");
         }
 
-        // We should be able to use mixin methods here, but even after declaring their types
-        // explicitly, they just don't work.
-        const replyCount = await Comment.count({
-            where: { parentId: comment.id },
-        });
-        if (replyCount > 0) {
-            // Comment cannot be deleted, clear its content instead
-            comment.content = "[deleted]";
-            await comment.save();
-            return { success: true };
-        }
-
-        // Otherwise we can just delete it
-        await comment.destroy();
+        await deleteComment(comment);
         return { success: true };
     },
     follow: async (event) => {

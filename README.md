@@ -51,6 +51,10 @@ AudioPub is built with SvelteKit and uses the Node adapter. It also uses MariaDB
 
 This will allow you to explore and modify the code locally.
 
+## API
+
+AudioPub has a JSON API for building native clients, such as Android, iOS and desktop apps. See [docs/api.md](docs/api.md) for the reference.
+
 ## Contributing
 
 I welcome contributions to AudioPub! your efforts are appreciated. Here's how you can contribute:

@@ -29,20 +29,14 @@ import {
     mute,
     unmute,
 } from "$lib/server/mutes";
-
-async function findUserByProfileParam(param: string) {
-    if (param.startsWith("@")) {
-        return User.findOne({ where: { name: param.slice(1).toLowerCase() } });
-    }
-    return User.findByPk(param);
-}
+import { findUserByParam } from "$lib/server/users";
 
 export const load: PageServerLoad = async (event) => {
     const pageString = event.url.searchParams.get("page");
     const page = pageString ? parseInt(pageString, 10) : 1;
     const limit = 30;
     const offset = (page - 1) * limit;
-    const profileUser = await findUserByProfileParam(event.params.id);
+    const profileUser = await findUserByParam(event.params.id);
     if (!profileUser) {
         return redirect(303, "/");
     }
@@ -120,7 +114,7 @@ export const actions: Actions = {
         if (!user || !user.isAdmin) {
             return error(403, "Forbidden");
         }
-        const userToBeBanned = await findUserByProfileParam(event.params.id);
+        const userToBeBanned = await findUserByParam(event.params.id);
         if (!userToBeBanned) {
             return error(404, "User not found");
         }
@@ -140,7 +134,7 @@ export const actions: Actions = {
         if (!user || !user.isAdmin) {
             return error(403, "Forbidden");
         }
-        const userToBeWarned = await findUserByProfileParam(event.params.id);
+        const userToBeWarned = await findUserByParam(event.params.id);
         if (!userToBeWarned) {
             return error(404, "User not found");
         }
@@ -155,7 +149,7 @@ export const actions: Actions = {
         if (!user || !user.isAdmin) {
             return error(403, "Forbidden");
         }
-        const userToBeTrusted = await findUserByProfileParam(event.params.id);
+        const userToBeTrusted = await findUserByParam(event.params.id);
         if (!userToBeTrusted) {
             return error(404, "User not found");
         }

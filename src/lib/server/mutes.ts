@@ -19,6 +19,7 @@
 import { error, type RequestEvent } from "@sveltejs/kit";
 import { Op, type WhereOptions } from "sequelize";
 import { Audio, Subscription, User, UserMute } from "./database";
+import { findUserByParam } from "./users";
 
 /**
  * Muting is a tool for regular users to curate their own feeds. Admins are
@@ -81,15 +82,24 @@ export function excludeMutedUsers(
     return { [column]: { [Op.notIn]: mutedIds } };
 }
 
+/**
+ * Notifications carry the user who caused them as the actor. This keeps out
+ * the ones caused by muted users, while still letting through system
+ * notifications, whose actorId is null and would otherwise be dropped by
+ * NOT IN.
+ */
+export function excludeMutedActors(mutedIds: string[]): WhereOptions {
+    if (mutedIds.length === 0) {
+        return {};
+    }
+    return {
+        [Op.or]: [{ actorId: null }, { actorId: { [Op.notIn]: mutedIds } }],
+    };
+}
+
 async function findTargetUser(event: RequestEvent): Promise<User | null> {
     if (event.route.id === "/user/[id]") {
-        const param = event.params.id!;
-        if (param.startsWith("@")) {
-            return User.findOne({
-                where: { name: param.slice(1).toLowerCase() },
-            });
-        }
-        return User.findByPk(param);
+        return findUserByParam(event.params.id!);
     }
     if (event.route.id === "/listen/[id]") {
         const audio = await Audio.findByPk(event.params.id);
@@ -102,14 +112,24 @@ async function findTargetUser(event: RequestEvent): Promise<User | null> {
 }
 
 export const mute = async (event: RequestEvent): Promise<any> => {
-    const user = event.locals.user;
-    if (!canMute(user)) {
+    if (!canMute(event.locals.user)) {
         return error(403, "Forbidden");
     }
 
     const userToMute = await findTargetUser(event);
     if (!userToMute) {
         return error(404, "User not found");
+    }
+    return muteUser(event, userToMute);
+};
+
+export async function muteUser(
+    event: RequestEvent,
+    userToMute: User,
+): Promise<{ success: true }> {
+    const user = event.locals.user;
+    if (!canMute(user)) {
+        return error(403, "Forbidden");
     }
     if (user!.id === userToMute.id) {
         return error(403, "Forbidden");
@@ -134,17 +154,27 @@ export const mute = async (event: RequestEvent): Promise<any> => {
 
     event.locals.mutedUserIds = undefined;
     return { success: true };
-};
+}
 
 export const unmute = async (event: RequestEvent): Promise<any> => {
-    const user = event.locals.user;
-    if (!user) {
+    if (!event.locals.user) {
         return error(403, "Forbidden");
     }
 
     const userToUnmute = await findTargetUser(event);
     if (!userToUnmute) {
         return error(404, "User not found");
+    }
+    return unmuteUser(event, userToUnmute);
+};
+
+export async function unmuteUser(
+    event: RequestEvent,
+    userToUnmute: User,
+): Promise<{ success: true }> {
+    const user = event.locals.user;
+    if (!user) {
+        return error(403, "Forbidden");
     }
 
     const deletedCount = await UserMute.destroy({
@@ -155,7 +185,7 @@ export const unmute = async (event: RequestEvent): Promise<any> => {
 
     if (deletedCount > 0) return { success: true };
     else return error(404, "Mute not found");
-};
+}
 
 export async function isMuted(
     event: RequestEvent,

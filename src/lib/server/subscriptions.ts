@@ -2,26 +2,40 @@ import { error, type RequestEvent } from "@sveltejs/kit";
 import Subscription from "./database/models/subscription";
 import { Audio, User } from "./database";
 import { isMuted } from "./mutes";
+import { findUserByParam } from "./users";
+
+async function findSubscribedToUser(event: RequestEvent): Promise<User | null> {
+    if (event.route.id == "/user/[id]") {
+        return findUserByParam(event.params.id!);
+    }
+    if (event.route.id == "/listen/[id]") {
+        const audio = await Audio.findByPk(event.params.id);
+        return User.findByPk(audio?.userId);
+    }
+    return null;
+}
 
 export const subscribe = async (event: RequestEvent): Promise<any> => {
+    if (!event.locals.user) {
+        return error(403, "Forbidden");
+    }
+
+    const subscribedToUser = await findSubscribedToUser(event);
+    if (!subscribedToUser) {
+        return error(403, "Forbidden");
+    }
+    return subscribeToUser(event, subscribedToUser);
+};
+
+export async function subscribeToUser(
+    event: RequestEvent,
+    subscribedToUser: User,
+): Promise<{ success: true }> {
     const user = event.locals.user;
     if (!user) {
         return error(403, "Forbidden");
     }
-    
-    let subscribedToUser;
-    if (event.route.id == "/user/[id]")
-        if (!event.params.id?.includes("@")) subscribedToUser = await User.findByPk(event.params.id);
-        else subscribedToUser = await User.findOne({ where: { name: event.params.id.slice(1) } });
-    else if (event.route.id == "/listen/[id]") {
-        const audio = await Audio.findByPk(event.params.id);
-        subscribedToUser = await User.findByPk(audio?.userId);
-    }
 
-    if (!subscribedToUser) {
-        return error(403, "Forbidden");
-    }
-        
     if (user.id == subscribedToUser.id) {
         return error(403, "Forbidden");
     }
@@ -33,32 +47,36 @@ export const subscribe = async (event: RequestEvent): Promise<any> => {
     }
 
     try {
-        await Subscription.create({ subscriberId: user.id, subscribedToId: subscribedToUser.id });
+        await Subscription.findOrCreate({
+            where: { subscriberId: user.id, subscribedToId: subscribedToUser.id },
+        });
         return { success: true };
     } catch {
         return error(500, "Internal error");
     }
-};
+}
 
 export const unsubscribe = async (event: RequestEvent): Promise<any> => {
+    if (!event.locals.user) {
+        return error(403, "Forbidden");
+    }
+
+    const subscribedToUser = await findSubscribedToUser(event);
+    if (!subscribedToUser) {
+        return error(403, "Forbidden");
+    }
+    return unsubscribeFromUser(event, subscribedToUser);
+};
+
+export async function unsubscribeFromUser(
+    event: RequestEvent,
+    subscribedToUser: User,
+): Promise<{ success: true }> {
     const user = event.locals.user;
     if (!user) {
         return error(403, "Forbidden");
     }
-    
-    let subscribedToUser;
-    if (event.route.id == "/user/[id]")
-        if (!event.params.id?.includes("@")) subscribedToUser = await User.findByPk(event.params.id);
-    else subscribedToUser = await User.findOne({ where: { name: event.params.id.slice(1) } });
-    else if (event.route.id == "/listen/[id]") {
-        const audio = await Audio.findByPk(event.params.id);
-        subscribedToUser = await User.findByPk(audio?.userId);
-    }
 
-    if (!subscribedToUser) {
-        return error(403, "Forbidden");
-    }
-        
     if (user.id == subscribedToUser.id) {
         return error(403, "Forbidden");
     }
@@ -67,4 +85,4 @@ export const unsubscribe = async (event: RequestEvent): Promise<any> => {
 
     if (deletedCount > 0) return { success: true }
     else return error(404, "Subscription not found")
-};
+}
