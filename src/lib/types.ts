@@ -26,6 +26,12 @@ export interface ClientsideUser {
     isTrusted: boolean;
 }
 
+/** The logged in user's own account, including what only they may see. */
+export interface ClientsideAccount extends ClientsideUser {
+    email: string;
+    isAdmin: boolean;
+}
+
 export interface ClientsideStream {
     id: string;
     title: string;

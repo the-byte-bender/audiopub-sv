@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-import type { Handle } from "@sveltejs/kit";
+import { json, type Handle } from "@sveltejs/kit";
 import jwt from "jsonwebtoken";
 import { User } from "$lib/server/database";
 import { streamingService } from "$lib/server/streaming";
@@ -57,7 +57,13 @@ export const handle: Handle = async ({ event, resolve }) => {
     event.locals.user = null;
     const fromAiHeader = event.request.headers.get("x-from-ai");
     event.locals.isFromAi = fromAiHeader ? true : false;
-    const token = event.cookies.get("token");
+    // Native clients have no cookie jar to keep the session in, so the same
+    // token is also accepted as a bearer token. When both are present, the
+    // header wins, as it is what the client explicitly chose to send.
+    const authorization = event.request.headers.get("authorization");
+    const token = authorization?.startsWith("Bearer ")
+        ? authorization.slice("Bearer ".length).trim()
+        : event.cookies.get("token");
     if (!token) {
         return resolve(event);
     }
@@ -81,6 +87,9 @@ export const handle: Handle = async ({ event, resolve }) => {
         event.locals.user = user;
 
         if (user.isBanned) {
+            if (event.url.pathname.startsWith("/api/")) {
+                return json({ error: "You are banned." }, { status: 403 });
+            }
             return new Response("You are banned.", { status: 403 });
         }
     } catch (e) {

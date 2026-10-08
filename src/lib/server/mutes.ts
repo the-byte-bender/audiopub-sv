@@ -82,6 +82,21 @@ export function excludeMutedUsers(
     return { [column]: { [Op.notIn]: mutedIds } };
 }
 
+/**
+ * Notifications carry the user who caused them as the actor. This keeps out
+ * the ones caused by muted users, while still letting through system
+ * notifications, whose actorId is null and would otherwise be dropped by
+ * NOT IN.
+ */
+export function excludeMutedActors(mutedIds: string[]): WhereOptions {
+    if (mutedIds.length === 0) {
+        return {};
+    }
+    return {
+        [Op.or]: [{ actorId: null }, { actorId: { [Op.notIn]: mutedIds } }],
+    };
+}
+
 async function findTargetUser(event: RequestEvent): Promise<User | null> {
     if (event.route.id === "/user/[id]") {
         return findUserByParam(event.params.id!);
