@@ -359,10 +359,22 @@ export const actions: Actions = {
         }
 
         const form = await event.request.formData();
-        const parentId = form.get("parentId") as string | null;
+        const parentId = (form.get("parentId") as string | null) || null;
         const comment = form.get("comment") as string;
         if (!comment) {
             return fail(400, { comment });
+        }
+        // A reply must answer a comment on this same audio.
+        if (parentId) {
+            const parent = await Comment.findByPk(parentId, {
+                attributes: ["audioId"],
+            });
+            if (!parent || parent.audioId !== audio.id) {
+                return fail(400, {
+                    comment,
+                    message: "The comment you are replying to was not found",
+                });
+            }
         }
         if (comment.length < 3 || comment.length > 4000) {
             return fail(400, {

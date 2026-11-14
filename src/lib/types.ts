@@ -94,6 +94,7 @@ export enum NotificationType {
     system = "system",
     favorite = "favorite",
     mention = "mention",
+    reply = "reply",
 }
 
 export enum NotificationTargetType {
