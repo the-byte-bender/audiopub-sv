@@ -17,9 +17,14 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <script lang="ts">
+    import { setContext } from "svelte";
+    import { INSIDE_LINK_CONTEXT } from "$lib/mentions";
     import Modal from "./modal.svelte";
     export let href: string;
     export let title: string;
+
+    // Text inside this link must not turn mentions into links of their own.
+    setContext(INSIDE_LINK_CONTEXT, true);
 
     const trustedSchemas = ["http:", "https:", "mailto:", "tel:", "ftp:"];
 

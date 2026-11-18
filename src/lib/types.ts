@@ -84,6 +84,8 @@ export interface ClientsideComment {
     user: ClientsideUser;
     audio?: ClientsideAudio;
     replies?: ClientsideComment[];
+    /** Lowercase names of the existing users this comment @mentions. */
+    mentions?: string[];
 }
 
 export enum NotificationType {
@@ -91,6 +93,8 @@ export enum NotificationType {
     upload = "upload",
     system = "system",
     favorite = "favorite",
+    mention = "mention",
+    reply = "reply",
 }
 
 export enum NotificationTargetType {

@@ -484,6 +484,9 @@
 
     {#if data.user && !data.user.isBanned}
         <form use:enhance action="?/add_comment" method="POST">
+            {#if form?.message}
+                <p class="form-message" role="alert">{form.message}</p>
+            {/if}
             {#if form?.replyTo}
                 <input type="hidden" name="parentId" value={form.replyTo.id} />
                 <label for="comment">Reply to @{form.replyTo.user.name}:</label>

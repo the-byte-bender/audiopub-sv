@@ -35,6 +35,8 @@ import sendEmail from "$lib/server/email";
 import { json, Op, Sequelize } from "sequelize";
 import { Json } from "sequelize/lib/utils";
 import { subscribe, unsubscribe } from "$lib/server/subscriptions";
+import { attachMentions } from "$lib/server/mentions";
+import { notifyAboutComment } from "$lib/server/comment_notifications";
 import {
     canBeMuted,
     canMute,
@@ -202,7 +204,9 @@ export const load: PageServerLoad = async (event) => {
         isMuted,
         canBeMutedByUser,
         audio: audio.toClientside(true, favoriteCount, isFavorited),
-        comments: sortedComments.map((c) => c.toClientside(false, true)),
+        comments: await attachMentions(
+            sortedComments.map((c) => c.toClientside(false, true)),
+        ),
         mimeType: audio.mimeType,
         isFollowing,
         archivedStreamId: audio.archivedStreamId,
@@ -355,10 +359,22 @@ export const actions: Actions = {
         }
 
         const form = await event.request.formData();
-        const parentId = form.get("parentId") as string | null;
+        const parentId = (form.get("parentId") as string | null) || null;
         const comment = form.get("comment") as string;
         if (!comment) {
             return fail(400, { comment });
+        }
+        // A reply must answer a comment on this same audio.
+        if (parentId) {
+            const parent = await Comment.findByPk(parentId, {
+                attributes: ["audioId"],
+            });
+            if (!parent || parent.audioId !== audio.id) {
+                return fail(400, {
+                    comment,
+                    message: "The comment you are replying to was not found",
+                });
+            }
         }
         if (comment.length < 3 || comment.length > 4000) {
             return fail(400, {
@@ -374,24 +390,7 @@ export const actions: Actions = {
             content: comment,
         });
 
-        // Send notifications to followers
-        const followers = await AudioFollow.findAll({
-            where: { audioId: audio.id } as any,
-        });
-        const followerIds = new Set<string>(followers.map((f) => f.userId));
-        if (audio.userId) followerIds.add(audio.userId);
-        followerIds.delete(user.id);
-        const payloads = Array.from(followerIds).map((uid) => ({
-            userId: uid,
-            actorId: user.id,
-            type: "comment" as const,
-            targetType: "comment" as const,
-            targetId: commentInDatabase.id,
-            metadata: { audioId: audio.id },
-        }));
-        if (payloads.length) {
-            await Notification.bulkCreate(payloads as any, { individualHooks: true });
-        }
+        await notifyAboutComment(commentInDatabase, audio, user);
 
         return { success: true };
     },
